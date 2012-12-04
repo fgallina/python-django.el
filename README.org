@@ -1,0 +1,45 @@
+This package contains python-django.el
+
+* Info
+
+  + Author: Fabián Ezequiel Gallina
+  + Contact: fabian at anue dot biz
+  + Project homepage: http://github.com/fgallina/python-django.el
+  + My Blog: http://www.from-the-cloud.com
+  + Downloads page: http://github.com/fgallina/python.el/downloads
+
+* Introduction
+
+  A Jazzy package for managing Django projects.
+
+  Django project management package with the goodies you would expect
+  and then some.  The project buffer workings is pretty much inspired
+  by the good ol' `magit-status' buffer.
+
+  See the header of python-django.el for more information.
+
+* Requirements
+
+  This package relies heavily in fgallina's `python.el' available in
+  stock Emacs>=24.3 (or https://github.com/fgallina/python.el).
+
+* Installation/Usage
+
+  Add this to your .emacs:
+
+  #+BEGIN_EXAMPLE
+  (add-to-list 'load-path "/folder/containing/file")
+  (require 'python-django)
+  #+END_EXAMPLE
+
+  *M-x describe-mode* when editing a python file should be enough to
+  get some good overview about what this major-mode is all about :)
+
+* Bug Reports
+
+  If you find a bug please report it in the github tracker.
+
+* License
+
+  python-django.el is free software under the GPL v3, see LICENSE file
+  for details.
