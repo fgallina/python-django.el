@@ -166,6 +166,12 @@
          :help "Kill all running commands for current project"]
         ["Get command help" python-django-help
          :help "Get help for any project's management commands"]
+        ["Cycle to next running management command"
+         python-django-ui-cycle-mgmt-opened-buffers-forward
+         :help "Cycle to next running management command"]
+        ["Cycle to previous running management command"
+         python-django-ui-cycle-mgmt-opened-buffers-backward
+         :help "Cycle to previous running management command"]
         "--"
         ;; Reserved for quick management commands
         "---"
