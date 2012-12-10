@@ -2300,7 +2300,7 @@ settings module (the same happens when called with two or more
                  (python-django-info-find-manage.py directory))
             (python-django-util-clone-local-variables)
             (python-django-ui-insert-header)
-            (condition-case nil
+            (condition-case err
                 (mapc (lambda (section)
                         (python-django-ui-tree-section-insert
                          (car section) (cdr section))
@@ -2317,14 +2317,16 @@ settings module (the same happens when called with two or more
                   "  + python-django-project-root: %s\n"
                   "  + python-django-settings-module: %s\n"
                   "  + python-django-python-executable: %s\n"
-                  "    - found in %s\n")
+                  "    - found in %s\n\n\n"
+                  "Error: %s \n")
                  python-django-project-root
                  python-django-settings-module
                  python-django-python-executable
                  (let* ((process-environment
                          (python-django-info-calculate-process-environment))
                         (exec-path (python-shell-calculate-exec-path)))
-                   (executable-find python-django-python-executable)))))))
+                   (executable-find python-django-python-executable))
+                 (error-message-string err))))))
           (when success
             (python-django-qmgmt-add-menu-items)
             (add-hook 'kill-buffer-hook
