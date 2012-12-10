@@ -102,12 +102,12 @@
 (require 'json)
 (require 'python)
 (require 'sql)
-(require 'tree-widget)
 (require 'widget)
 
 (eval-when-compile
   (require 'cl)
   (require 'wid-edit)
+  (require 'tree-widget)
   ;; Avoid compiler warnings
   (defvar view-return-to-alist))
 
