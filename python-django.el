@@ -103,11 +103,11 @@
 (require 'python)
 (require 'sql)
 (require 'widget)
+(require 'tree-widget)
 
 (eval-when-compile
   (require 'cl)
   (require 'wid-edit)
-  (require 'tree-widget)
   ;; Avoid compiler warnings
   (defvar view-return-to-alist))
 
@@ -1877,6 +1877,18 @@ default to a sane value."
     "yaml" "scss" "less")
   "Allowed extensions when scanning project files.")
 
+(defcustom python-django-ui-image-enable t
+  "Enable images for widgets?"
+  :group 'python-django
+  :type  'boolean
+  :safe 'booleanp)
+
+(defcustom python-django-ui-theme "folder"
+  "Default theme for widgets."
+  :group 'python-django
+  :type  'boolean
+  :safe 'stringp)
+
 (defcustom python-django-ui-buffer-switch-function 'pop-to-buffer
   "Function for switching to the project buffer.
 The function receives one argument, the status buffer."
@@ -2300,6 +2312,9 @@ settings module (the same happens when called with two or more
                  (python-django-info-find-manage.py directory))
             (python-django-util-clone-local-variables)
             (python-django-ui-insert-header)
+            (set (make-local-variable 'tree-widget-image-enable)
+                 python-django-ui-image-enable)
+            (tree-widget-set-theme python-django-ui-theme)
             (condition-case err
                 (mapc (lambda (section)
                         (python-django-ui-tree-section-insert
