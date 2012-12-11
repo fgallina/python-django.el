@@ -1889,7 +1889,7 @@ default to a sane value."
   :type  'boolean
   :safe 'stringp)
 
-(defcustom python-django-ui-buffer-switch-function 'pop-to-buffer
+(defcustom python-django-ui-buffer-switch-function 'switch-to-buffer
   "Function for switching to the project buffer.
 The function receives one argument, the status buffer."
   :group 'python-django
