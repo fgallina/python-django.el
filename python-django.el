@@ -288,6 +288,7 @@ the same variables of python files."
           (expand-file-name
            python-django-info-manage.py-path))
          (manage.py-exists (get-file-buffer file-name))
+         (flymake-start-syntax-check-on-find-file nil)
          (manage.py-buffer
           (or manage.py-exists
               (prog1
