@@ -2030,7 +2030,8 @@ Optional argument IGNORE is there for compatibility."
                    dir-list)
            (mapcar (lambda (file)
                      `(python-django-ui-tree-file-widget
-                       :file ,(expand-file-name file dir)
+                       :file ,(and file (not (string= file ""))
+                                   (expand-file-name file dir))
                        :tag ,file))
                    file-list))))))
 
