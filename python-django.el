@@ -1718,7 +1718,7 @@ Optional argument ARGS args for it."
   (:submenu "South" :binding "somt"
    (database (python-django-minibuffer-read-database "Database: " default)
              "default" "--database=")
-   (app (python-django-minibuffer-read-app "Migrate App: "))
+   (app (python-django-minibuffer-read-app "Migrate App: " nil t))
    (migration (python-django-minibuffer-read-migration "To migration: " app))))
 
 (defalias 'python-django-qmgmt-migrate-app-to-callback
