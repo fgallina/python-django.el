@@ -2066,7 +2066,10 @@ With positive ARG move forward that many times, else backwards."
           (when (not widget)
             (throw 'nowidget t))
           (when (eq (widget-get widget :help-echo) 'tree-widget-icon-help-echo)
-            (setq success-moves (1+ success-moves))))))))
+            (setq success-moves (1+ success-moves))))))
+    (setq default-directory
+          (or (python-django-ui-directory-at-point)
+              (file-name-directory python-django-info-manage.py-path)))))
 
 (defun python-django-ui-widget-forward (arg)
   "Move point to the next field or button.
@@ -2312,6 +2315,9 @@ settings module (the same happens when called with two or more
             (set (make-local-variable
                   'python-django-info-manage.py-path)
                  (python-django-info-find-manage.py directory))
+            (set (make-local-variable 'default-directory)
+                 (file-name-directory
+                  python-django-info-manage.py-path))
             (python-django-util-clone-local-variables)
             (python-django-ui-insert-header)
             (set (make-local-variable 'tree-widget-image-enable)
