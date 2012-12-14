@@ -585,6 +585,17 @@ Values retrieved by this function are cached so when FORCE is
 non-nil the cached value is invalidated."
   (cdr (assq (intern app) (python-django-info-get-app-paths force))))
 
+(defun python-django-info-get-app-migrations (app)
+  "Get APP's list of migrations."
+  (mapcar (lambda (file)
+            file)
+          (ignore-errors
+            (directory-files
+             (expand-file-name
+              "migrations"
+              (python-django-info-get-app-path app))
+             nil "^[0-9]\\{4\\}_.*\\.py$"))))
+
 (defun python-django-info-module-path (module)
   "Get MODULE's path."
   (let* ((process-environment
@@ -810,14 +821,7 @@ Optional argument INITIAL-INPUT is the initial prompted value."
   "Read south migration number for given app from minibuffer.
 PROMPT is a string to prompt user for database.  APP is the app
 to read migrations from."
-  (let* ((migrations-dir (expand-file-name
-                          "migrations"
-                          (python-django-info-get-app-path app)))
-         (migrations
-          (mapcar (lambda (file)
-                    file)
-                  (directory-files migrations-dir
-                                   nil "^[0-9]\\{4\\}_.*\\.py$"))))
+  (let* ((migrations (python-django-info-get-app-migrations app)))
     (minibuffer-with-setup-hook
         (lambda ()
           (setq minibuffer-completion-table migrations))
@@ -1693,6 +1697,20 @@ Optional argument ARGS args for it."
 
 ;; South integration
 
+(defun python-django-qmgmt-open-migration-callback (args)
+  "Callback for commands that create migrations.
+Argument ARGS is an alist with the arguments passed to the management command."
+  (let ((app (cdr (assq 'app args))))
+    (python-django-qmgmt-kill-and-msg-callback args)
+    (and (y-or-n-p "Open the created migration?: ")
+         (find-file
+          (let ((app "cscfb"))
+            (expand-file-name
+             (car (last (python-django-info-get-app-migrations app)))
+             (expand-file-name
+              "migrations"
+              (python-django-info-get-app-path app))))))))
+
 (python-django-qmgmt-define convert_to_south
   "Convert given app to South."
   (:submenu "South" :binding "soc"
@@ -1708,7 +1726,7 @@ Optional argument ARGS args for it."
    (name "Datamigration name: ")))
 
 (defalias 'python-django-qmgmt-datamigration-callback
-  'python-django-qmgmt-kill-and-msg-callback)
+  'python-django-qmgmt-open-migration-callback)
 
 (python-django-qmgmt-define migrate-all
   "Run all migrations for all apps."
@@ -1753,10 +1771,11 @@ Optional argument ARGS args for it."
   "Create new empty schemamigration for the given app."
   (:submenu "South" :switches "--empty" :binding "soss"
    (app (python-django-minibuffer-read-app
-         "Initial schemamigration for App: "))))
+         "Initial schemamigration for App: "))
+   (name "Schemamigration name: ")))
 
 (defalias 'python-django-qmgmt-schemamigration-callback
-  'python-django-qmgmt-kill-and-msg-callback)
+  'python-django-qmgmt-open-migration-callback)
 
 (python-django-qmgmt-define schemamigration-auto
   "Create an automatic schemamigration for the given app."
@@ -1765,7 +1784,7 @@ Optional argument ARGS args for it."
          "Auto schemamigration for App: "))))
 
 (defalias 'python-django-qmgmt-schemamigration-auto-callback
-  'python-django-qmgmt-kill-and-msg-callback)
+  'python-django-qmgmt-open-migration-callback)
 
 
 ;;; Fast commands
