@@ -294,7 +294,22 @@ the same variables of python files."
               (prog1
                   (find-file-noselect file-name t)
                 (message nil)))))
-    (python-util-clone-local-variables manage.py-buffer)
+    ;; TODO: Add a predicate parameter to
+    ;; `python-util-clone-local-variables' itself to handle vars not
+    ;; intended to be changed by the variable cloning and replace the
+    ;; following code with that.
+    (mapc
+     (lambda (pair)
+       (and (symbolp (car pair))
+            (string-match "^python-" (symbol-name (car pair)))
+            (not (memq (car pair)
+                       '(python-django-project-root
+                         python-django-settings-module
+                         python-django-info-project-name
+                         python-django-info-manage.py-path)))
+            (set (make-local-variable (car pair))
+                 (cdr pair))))
+     (buffer-local-variables manage.py-buffer))
     (when (not manage.py-exists)
       (kill-buffer manage.py-buffer))))
 
@@ -2223,10 +2238,9 @@ buffers that belong to PROJECT-NAME."
 \\{python-django-mode-map}")
 
 ;;;###autoload
-(defun python-django-open-project (directory settings
-                                             &optional existing-buffer)
+(defun python-django-open-project (directory settings &optional existing)
   "Open a Django project at given DIRECTORY using SETTINGS.
-Optional argument EXISTING-BUFFER is internal and should not be used.
+Optional argument EXISTING is internal and should not be used.
 
 The recommended way to chose your project root, is to use the
 directory containing your settings module; for instance if your
@@ -2252,47 +2266,48 @@ settings module (the same happens when called with two or more
           (python-django-mode-find-buffer
            (and (eq major-mode 'python-django-mode)
                 python-django-info-project-name) t)))
-     (cond ((and (not current-prefix-arg) (not buf)
-                 python-django-project-root
-                 python-django-settings-module)
-            ;; There's no existing buffer but project variables are
-            ;; set, so use them to open the project.
-            (list python-django-project-root
-                  python-django-settings-module
-                  (and (not buf)
-                       (eq major-mode 'python-django-mode)
-                       (current-buffer))))
-           ((and (not current-prefix-arg) buf)
-            ;; there's an existing buffer move/cycle to it.
-            (with-current-buffer buf
-              (list
-               python-django-project-root
-               python-django-settings-module
-               buf)))
-           ((or (and python-django-known-projects
-                     (or (not current-prefix-arg)
-                         (= (prefix-numeric-value current-prefix-arg) 4))))
-            ;; When there are known projects and called with just one
-            ;; prefix arg or none and other project input methods
-            ;; failed.
-            (cdr
-             (assoc
-              (python-django-minibuffer-read-from-list
-               "Project: " python-django-known-projects)
-              python-django-known-projects)))
-           (t
-            ;; When called with two or more prefix arguments or all
-            ;; input methods failed.
-            (list
-             (read-directory-name
-              "Project Root: " python-django-project-root nil t)
-             (read-string
-              (format
-               "Settings module (default: %s): "
-               (or python-django-settings-module "settings"))
-              nil nil
-              (or python-django-settings-module "settings")))))))
-  (if (not existing-buffer)
+     (cond
+      ((and (not current-prefix-arg)
+            (not buf)
+            python-django-project-root
+            python-django-settings-module)
+       ;; There's no existing buffer but project variables are
+       ;; set, so use them to open the project.
+       (list python-django-project-root
+             python-django-settings-module
+             ;; if the user happens to be in the project buffer
+             ;; itself, do nothing.
+             (and (eq major-mode 'python-django-mode)
+                  (current-buffer))))
+      ((and (not current-prefix-arg) buf)
+       ;; there's an existing buffer move/cycle to it.
+       (with-current-buffer buf
+         (list
+          python-django-project-root
+          python-django-settings-module
+          buf)))
+      ((or (and python-django-known-projects
+                (<= (prefix-numeric-value current-prefix-arg) 4)))
+       ;; When there are known projects and called at most with one
+       ;; prefix arg try opening a known project.
+       (cdr
+        (assoc
+         (python-django-minibuffer-read-from-list
+          "Project: " python-django-known-projects)
+         python-django-known-projects)))
+      (t
+       (let ((root))
+         ;; When called with two or more prefix arguments or all
+         ;; input methods failed.
+         (list
+          (setq root (read-directory-name
+                      "Project Root: " python-django-project-root nil t))
+          (read-string
+           "Settings module: "
+           (or python-django-settings-module
+               (format "%s.settings"
+                       (python-django-info-directory-basename root))))))))))
+  (if (not existing)
       (let* ((project-name (python-django-info-directory-basename directory))
              (buffer-name (format "*Django: %s*" project-name))
              (success t))
@@ -2356,7 +2371,7 @@ settings module (the same happens when called with two or more
                       #'python-django-mode-on-kill-buffer nil t)
             (python-django-ui-beginning-of-widgets))
           (python-django-ui-show-buffer (current-buffer))))
-    (python-django-ui-show-buffer existing-buffer)))
+    (python-django-ui-show-buffer existing)))
 
 ;; Stolen from magit.
 (defun python-django-close-project (&optional kill-buffer)
