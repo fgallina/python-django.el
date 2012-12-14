@@ -552,7 +552,7 @@ non-nil the cached value is invalidated."
                    (concat "from __future__ import print_function;"
                            "from django.conf import settings;"
                            "from django.utils import simplejson;"
-                           "import os.path;")
+                           "from os.path import dirname, abspath;")
                    (concat
                     "app_paths = {}\n"
                     "for app in settings.INSTALLED_APPS:\n"
@@ -560,7 +560,7 @@ non-nil the cached value is invalidated."
                     "    if '.' in app:\n"
                     "        for sub in app.split('.')[1:]:\n"
                     "            mod = getattr(mod, sub)\n"
-                    "    app_paths[app] = os.path.dirname(mod.__file__)\n"
+                    "    app_paths[app] = dirname(abspath(mod.__file__))\n"
                     "print(simplejson.dumps(app_paths), end='')"))))))
     python-django-info--get-app-paths-cache))
 
