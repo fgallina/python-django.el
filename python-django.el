@@ -907,7 +907,8 @@ the `python-django-mgmt--available-commands' cache."
 
 (defun python-django-mgmt-make-comint-for-runserver (command process-name)
   "Run COMMAND with PROCESS-NAME in generic Comint buffer."
-  (python-django-mgmt-make-comint-for-shell command process-name))
+  (let ((python-shell-enable-font-lock nil))
+    (python-django-mgmt-make-comint-for-shell command process-name)))
 
 (defun python-django-mgmt-make-comint-for-runserver_plus (command process-name)
   "Run COMMAND with PROCESS-NAME in generic Comint buffer."
