@@ -1000,9 +1000,12 @@ displayed automatically."
          (process-environment
           (python-django-info-calculate-process-environment))
          (exec-path (python-shell-calculate-exec-path))
-         (process-name (format "[Django %s] ./manage.py %s %s"
-                               python-django-info-project-name
-                               command args))
+         (process-name
+          (replace-regexp-in-string
+           "[\t ]+$" ""
+           (format "[Django %s] ./manage.py %s %s"
+                   python-django-info-project-name
+                   command args)))
          (buffer-name (format "*%s*" process-name))
          (current-buffer (current-buffer))
          (make-comint-special-func-name
@@ -1011,17 +1014,16 @@ displayed automatically."
          (full-command
           (format "%s %s %s"
                   python-django-info-manage.py-path
-                  command args))
-         (buffer (get-buffer-create buffer-name)))
-    (with-current-buffer buffer
+                  command args)))
+    (if (not (fboundp make-comint-special-func-name))
+        (python-django-mgmt-make-comint full-command process-name)
+      (funcall make-comint-special-func-name full-command process-name))
+    (with-current-buffer buffer-name
       (python-util-clone-local-variables current-buffer)
       (set (make-local-variable 'python-django-mgmt-output-buffer) "")
       (and capture-ouput
            (add-hook (make-local-variable 'comint-output-filter-functions)
                      'python-django-mgmt-capture-output))
-      (if (not (fboundp make-comint-special-func-name))
-          (python-django-mgmt-make-comint full-command process-name)
-        (funcall make-comint-special-func-name full-command process-name))
       (set (make-local-variable
             'python-django-mgmt-parent-buffer) current-buffer)
       (python-django-util-alist-add
@@ -1035,8 +1037,11 @@ displayed automatically."
           python-django-mgmt--opened-buffers))
        nil t))
     (unless no-pop
-      (funcall python-django-mgmt-buffer-switch-function buffer-name))
-    buffer))
+      (funcall python-django-mgmt-buffer-switch-function buffer-name)
+      (with-current-buffer buffer-name
+        (and (get-buffer-process (current-buffer))
+             (comint-goto-process-mark))))
+    buffer-name))
 
 (add-to-list 'debug-ignored-errors
              "^Management command .* is not available in current project.")
