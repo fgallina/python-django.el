@@ -1549,12 +1549,23 @@ management command."
                         (format "File `%s' exists; overwrite? " file-name))
                    (throw 'file-name file-name)))))))
         (output-buffer python-django-mgmt-output-buffer))
-    (with-current-buffer (find-file-noselect file-name)
+    (with-temp-buffer
       (set (make-local-variable 'require-final-newline) t)
-      (delete-region (point-min) (point-max))
       (insert output-buffer)
-      (save-buffer)
-      (kill-buffer))
+      ;; Ensure there's a final newline
+      (and (> (point-max) (point-min))
+           (not (= (char-after (1- (point-max))) ?\n))
+           (insert "\n"))
+      (write-region
+       (progn
+         ;; Remove possible logs from output.
+         (goto-char (point-min))
+         (re-search-forward
+          "^\\[\\|^<\\?xml +version=\"\\|^- +fields: " nil t)
+         (beginning-of-line 1)
+         (point))
+       (point-max)
+       file-name))
     (kill-buffer)
     (python-django-mgmt-restore-window-configuration)
     (message "Fixture saved to file `%s'." file-name)))
