@@ -1022,8 +1022,10 @@ displayed automatically."
       (python-util-clone-local-variables current-buffer)
       (set (make-local-variable 'python-django-mgmt-output-buffer) "")
       (and capture-ouput
-           (add-hook (make-local-variable 'comint-output-filter-functions)
-                     'python-django-mgmt-capture-output))
+           (add-hook 'comint-output-filter-functions
+                     'python-django-mgmt-capture-output nil t))
+      (add-hook 'comint-output-filter-functions
+                'comint-truncate-buffer nil t)
       (set (make-local-variable
             'python-django-mgmt-parent-buffer) current-buffer)
       (python-django-util-alist-add
