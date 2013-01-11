@@ -1075,27 +1075,24 @@ When called with universal argument you can filter the COMMAND to kill."
 
 ;;; Management shortcuts
 
-(defvar python-django-qmgmt--menu-items nil
-  "List of menu items for quick management commands.")
-(setq python-django-qmgmt--menu-items nil)
-
-(defmacro python-django-qmgmt-define (name doc-or-args &optional args)
+(defmacro python-django-qmgmt-define (name doc-or-args &optional args &rest iswitches)
   "Define a quick management command.
 Argument NAME is a symbol and it is used to calculate the
 management command this command will execute, so it should have
 the form cmdname[-rest].  Argument DOC-OR-ARGS might be the
 docstring for the defined command or the list of arguments, when
 a docstring is supplied ARGS is used as the list of arguments
-instead.
+instead.  The rest ISWITCHES is a list of interactive switches
+the user will be prompted for.
 
 This is a full example that will define how to execute Django's
 dumpdata for the current application quickly:
 
   (python-django-qmgmt-define dumpdata-app
     \"Run dumpdata for current application.\"
-    (:submenu \"Database\" :switches \"--format=json\" :binding \"dda\"
-     (database \"Database\" \"default\" \"--database=\")
-     (app \"App\")))
+    (:submenu \"Database\" :switches \"--format=json\" :binding \"dda\")
+    (database \"Database\" \"default\" \"--database=\")
+    (app \"App\"))
 
 When that's is evaled a command called
 `python-django-qmgmt-dumpdata' is created and will react
@@ -1104,11 +1101,7 @@ depending on the arguments passed to this macro.
 All commands defined by this macro, when called with `prefix-arg'
 will ask the user for values instead of using defaults.
 
-ARGS is a list with the form:
-    (KEYWORD-ARGUMENTS ARGLIST)
-
-KEYWORD-ARGUMENTS available are ':binding' ':switches' and
-':submenu', all of them are optional and their effects are:
+ARGS is a property list.  Valid keys are (all optional):
 
     + :binding, when defined, the new command is bound to the
     default prefix for quick management commands plus this value.
@@ -1129,14 +1122,14 @@ KEYWORD-ARGUMENTS available are ':binding' ':switches' and
     to the root.
 
     + :switches, when defined, the new command is executed with
-    those switches.
+    these fixed switches.
 
-ARGLIST is a list of the form (VARNAME PROMPT DEFAULT SWITCH
-FORCE-ASK), you can add 0 or more ARGLISTs depending on the
+ISWITCHES have the form (VARNAME PROMPT DEFAULT SWITCH
+FORCE-ASK), you can add 0 or more ISWITCHES depending on the
 number of parameters you need to pass to the management command.
 The description for each element of the list are:
 
-    + VARNAME must be a symbol that must not repeat in other ARGLIST.
+    + VARNAME must be a unique symbol not used in other switch.
 
     + PROMPT must be a string for the prompt that will be shown
     when user is asked for a value using `read-string' or it can
@@ -1160,207 +1153,180 @@ The description for each element of the list are:
     value is available."
   (declare
    (indent defun))
-  (let ((docstring (when (stringp doc-or-args)
-                     doc-or-args))
-        (args (if (stringp doc-or-args)
-                  args
-                doc-or-args)))
-    (let* ((defun-name (intern (format "qmgmt-%s" name)))
-           (full-name (intern (format "python-django-%s" defun-name)))
-           (callback (intern (format "%s-callback" full-name)))
-           (command (car (split-string (format "%s" name) "-")))
-           (switches)
-           (binding)
-           (no-pop)
-           (quick-submenu)
-           (msg)
-           (capture-output)
-           (submenu '("Django"))
-           (iargs (let ((margs (purecopy args))
-                        (iargs))
-                    (while margs
-                      (cond ((equal (car margs) :binding)
-                             (setq binding (cadr margs))
-                             (setq margs (cddr margs)))
-                            ((equal (car margs) :no-pop)
-                             (setq no-pop (cadr margs))
-                             (setq margs (cddr margs)))
-                            ((equal (car margs) :switches)
-                             (setq switches (cadr margs))
-                             (setq margs (cddr margs)))
-                            ((equal (car margs) :submenu)
-                             (setq quick-submenu (cadr margs))
-                             (setq margs (cddr margs)))
-                            ((equal (car margs) :msg)
-                             (setq msg (cadr margs))
-                             (setq margs (cddr margs)))
-                            ((equal (car margs) :capture-output)
-                             (setq capture-output (cadr margs))
-                             (setq margs (cddr margs)))
-                            (t
-                             (setq iargs (cons (car margs) iargs))
-                             (setq margs (cdr margs)))))
-                    (reverse iargs)))
-           (keys (when binding
-                   (format "c%s" binding)))
-           (defargs (mapcar 'car iargs))
-           (cmd-spec (concat
-                      (format "./manage.py %s " command)
-                      (when switches
-                        (format "%s " switches))
-                      (when defargs
-                        (mapconcat
-                         (lambda (arg)
-                           (let* ((switch (nth 3 arg))
-                                  (switch
-                                   (cond
-                                    ((eq (length switch) 0)
-                                     "")
-                                    ((eq ?= (car (last (append switch nil))))
-                                     switch)
-                                    (t (format "%s " switch))))
-                                  (varname (symbol-name (nth 0 arg))))
-                             (format "%s<%s>" switch varname)))
-                         iargs
-                         " "))))
-           (interactive-code
-            (mapcar (lambda (arg)
-                      (let* ((default (nth 2 arg))
-                             (switch (nth 3 arg))
-                             (switch
-                              (cond ((eq (length switch) 0)
-                                     "")
-                                    ((eq ?= (car (last (append switch nil))))
-                                     switch)
-                                    (t (format "%s " switch))))
-                             (force-ask (nth 4 arg))
-                             (read-func
-                              (if (listp (nth 1 arg))
-                                  (nth 1 arg)
-                                `(read-string ,(nth 1 arg) default))))
-                         `(concat
-                           ,switch
-                           (setq ,(car arg)
-                                 (let ((default ,default))
-                                   (if (or ,force-ask
-                                           current-prefix-arg
-                                           (not default))
-                                       ,read-func
-                                     default))))))
-                    iargs))
-           (item-docstring
-            (if docstring
-                (car (split-string docstring "\n"))
-              (format
-               "Run ./manage.py %s command quickly."
-               (concat command (if switches
-                                   (concat " " switches)
-                                 "")))))
-           (full-submenu (if (not quick-submenu)
-                             submenu
-                           (append submenu (list quick-submenu))))
-           (full-docstring
-            (format "%s\n\n%s\n\n%s"
-                    cmd-spec
-                    (or docstring item-docstring)
-                    (concat
-                     "This is an interactive command defined by "
-                     "`python-django-qmgmt-define' macro.\n"
-                     "Users can override any parameter with defaults by "
-                     "calling this command with `prefix-arg' .\n\n"
-                     "Bound to: \n\n"
-                     (when keys
-                       (format "  * Keybinding: %s\n" keys))
-                     (format "  * Menu: %s\n\n"
-                             (mapconcat 'identity full-submenu " -> "))
-                     (when switches
-                       (format "Default switches: \n\n  * %s\n\n" switches))
-                     (when iargs
-                       (format
-                        "Arguments: \n\n%s"
-                        (mapconcat
-                         (lambda (arg)
-                           (let* ((default (nth 2 arg))
-                                  (switch (nth 3 arg))
-                                  (switch
-                                   (cond
-                                    ((eq (length switch) 0)
-                                     nil)
-                                    ((eq ?= (car (last (append switch nil))))
-                                     switch)
-                                    (t (format "%s " switch))))
-                                  (force-ask (nth 4 arg)))
-                             (concat
-                              (format "  * %s:\n"
-                                      (upcase (symbol-name (car arg))))
-                              (format "    + Switch: %s\n" switch)
-                              (format "    + Defaults: %s\n"
-                                      (prin1-to-string default))
-                              (format "    + Read SPEC: %s\n"
-                                      (prin1-to-string (nth 1 arg)))
-                              (format "    + Force prompt: %s\n"
-                                      force-ask)
-                              (format "    + Requires user interaction?: %s"
-                                      (not (not (or force-ask default)))))))
-                         iargs "\n\n")))))))
-      `(progn
-         (defun ,full-name ,defargs
-           ,full-docstring
-           (interactive
-            (let ,defargs
-              (list ,@interactive-code)))
-           (setq python-django-mgmt--previous-window-configuration
-                 (current-window-configuration))
-           (let* ((has-callback (fboundp ',callback))
-                  (process (get-buffer-process
-                            (python-django-mgmt-run-command
-                             ,command
-                             (concat ,(or switches "") " "
-                                     (mapconcat 'symbol-value ',defargs " "))
-                             ,capture-output ,no-pop))))
-             (when has-callback
-               (lexical-let
-                   ((cb
-                     (apply-partially
-                      ',callback
-                      (cons
-                       (cons :msg ,msg)
-                       (mapcar
-                        #'(lambda (sym)
-                            (let ((val (symbol-value sym)))
-                              (cons
-                               sym
-                               (cond
-                                ((string-match "^--" val)
-                                 (substring val (1+ (string-match "=" val))))
-                                ((string-match "^-" val)
-                                 (substring val 3))
-                                (t val)))))
-                        ',defargs)))))
-                 (set-process-sentinel
-                  process
-                  #'(lambda (process status)
-                      (when (string= status "finished\n")
-                        (set-buffer (process-buffer process))
-                        (funcall cb))))))))
-         (when ,binding
-           (ignore-errors
-             (define-key python-django-mode-map ,keys ',full-name)))
-         (when ,quick-submenu
-           (add-to-list
-            'python-django-qmgmt--menu-items
-            '(easy-menu-add-item
-              nil ',submenu (list ,quick-submenu) "---") t))
-         (add-to-list
-          'python-django-qmgmt--menu-items
-          '(easy-menu-add-item
-            nil ',full-submenu
-            [,item-docstring
-             ,full-name
-             :help ,cmd-spec
-             :active (member ,command (python-django-mgmt-list-commands))
-             ] "---") t)
-         ',full-name))))
+  (let* ((docstring (and (stringp doc-or-args) doc-or-args))
+         (args (if docstring args doc-or-args))
+         (args (if (eq ?: (string-to-char (symbol-name (car args))))
+                   args
+                 ;; args is not a plist, append it to iswitches and
+                 ;; set args to nil.
+                 (setq iswitches (cons args iswitches))
+                 nil))
+         (defun-name (intern (format "qmgmt-%s" name)))
+         (full-name (intern (format "python-django-%s" defun-name)))
+         (callback (intern (format "%s-callback" full-name)))
+         (command (car (split-string (format "%s" name) "-")))
+         (binding (plist-get args :binding))
+         (capture-output (plist-get args :capture-output))
+         (msg (plist-get args :msg))
+         (no-pop (plist-get args :no-pop))
+         (quick-submenu (plist-get args :submenu))
+         (switches (plist-get args :switches))
+         (keys (and binding (format "c%s" binding)))
+         (defargs (mapcar 'car iswitches))
+         (cmd-spec
+          ;; The spec is the shell command with placeholders in it.
+          ;; Example: ./manage.py dumpdata --database=<database>
+          ;; --indent=<indent> --format=<format> <app>
+          (concat
+           (format "./manage.py %s " command)
+           (and switches (format "%s " switches))
+           (and defargs
+                (mapconcat
+                 (lambda (arg)
+                   (let* ((switch (nth 3 arg))
+                          (switch
+                           (cond
+                            ((eq (length switch) 0)
+                             "")
+                            ((eq ?= (car (last (append switch nil))))
+                             switch)
+                            (t (format "%s " switch))))
+                          (varname (symbol-name (nth 0 arg))))
+                     (format "%s<%s>" switch varname)))
+                 iswitches
+                 " "))))
+         (interactive-code
+          (mapcar
+           (lambda (arg)
+             (let* ((default (nth 2 arg))
+                    (switch (nth 3 arg))
+                    (switch
+                     (cond ((eq (length switch) 0)
+                            "")
+                           ((eq ?= (car (last (append switch nil))))
+                            switch)
+                           (t (format "%s " switch))))
+                    (force-ask (nth 4 arg))
+                    (read-func
+                     (if (listp (nth 1 arg))
+                         (nth 1 arg)
+                       `(read-string ,(nth 1 arg) default))))
+               `(concat
+                 ,switch
+                 (setq ,(car arg)
+                       (let ((default ,default))
+                         (if (or ,force-ask
+                                 current-prefix-arg
+                                 (not default))
+                             ,read-func
+                           default))))))
+           iswitches))
+         (item-docstring
+          (if docstring
+              (car (split-string docstring "\n"))
+            (format "Run ./manage.py %s" cmd-spec)))
+         (full-docstring
+          (format "%s\n\n%s\n\n%s"
+                  cmd-spec
+                  (or docstring item-docstring)
+                  (concat
+                   "This is an interactive command defined by "
+                   "`python-django-qmgmt-define' macro.\n"
+                   "Users can override any parameter with defaults by "
+                   "calling this command with `prefix-arg' .\n\n"
+                   (and switches
+                        (format "Default switches: \n\n  * %s\n\n" switches))
+                   (and
+                    iswitches
+                    (format
+                     "Arguments: \n\n%s"
+                     (mapconcat
+                      (lambda (arg)
+                        (let* ((default (nth 2 arg))
+                               (switch (nth 3 arg))
+                               (switch
+                                (cond
+                                 ((eq (length switch) 0)
+                                  nil)
+                                 ((eq ?= (car (last (append switch nil))))
+                                  switch)
+                                 (t (format "%s " switch))))
+                               (force-ask (nth 4 arg)))
+                          (concat
+                           (format "  * %s:\n"
+                                   (upcase (symbol-name (car arg))))
+                           (format "    + Switch: %s\n" switch)
+                           (format "    + Defaults: %s\n"
+                                   (prin1-to-string default))
+                           (format "    + Read SPEC: %s\n"
+                                   (prin1-to-string (nth 1 arg)))
+                           (format "    + Force prompt: %s\n"
+                                   force-ask)
+                           (format "    + Requires user interaction?: %s"
+                                   (if (or force-ask (not default))
+                                       "yes" "no")))))
+                      iswitches "\n\n")))))))
+    `(progn
+       (defun ,full-name ,defargs
+         ,full-docstring
+         (interactive
+          (let ,defargs
+            (list ,@interactive-code)))
+         (setq python-django-mgmt--previous-window-configuration
+               (current-window-configuration))
+         (let* ((cmd-args (concat ,switches (and ,switches " ")
+                                  (mapconcat 'symbol-value ',defargs " ")))
+                (process (get-buffer-process
+                          (python-django-mgmt-run-command
+                           ,command cmd-args
+                           ,capture-output ,no-pop))))
+           (message "Running: ./manage.py %s %s" ,command cmd-args)
+           (when (fboundp ',callback)
+             ;; There's a callback defined, we create another function
+             ;; by applying partially the existing callback and giving
+             ;; it an alist with all the user selected values as an
+             ;; argument.  Then the callback is executed when the
+             ;; process finishes correctly.
+             (lexical-let
+                 ((cb
+                   (apply-partially
+                    ',callback
+                    (cons
+                     (cons :msg ,msg)
+                     (mapcar
+                      #'(lambda (sym)
+                          (let ((val (symbol-value sym)))
+                            (cons
+                             sym
+                             (cond
+                              ((string-match "^--" val)
+                               (substring val (1+ (string-match "=" val))))
+                              ((string-match "^-" val)
+                               (substring val 3))
+                              (t val)))))
+                      ',defargs)))))
+               (set-process-sentinel
+                process
+                #'(lambda (process status)
+                    (when (string= status "finished\n")
+                      (set-buffer (process-buffer process))
+                      (funcall cb))))))))
+       ;; Add the specified binding for this quick command.
+       (and ,binding
+            (ignore-errors
+              (define-key python-django-mode-map ,keys ',full-name)))
+       ;; Add menu stuff.
+       (easy-menu-add-item
+        'python-django-menu nil (list ,quick-submenu) "---")
+       (easy-menu-add-item
+        'python-django-menu (list ,quick-submenu)
+        [,cmd-spec
+         ,full-name
+         :help ,item-docstring
+         :active (member ,command (python-django-mgmt-list-commands))
+         ] "---")
+       ;; Just like defun, return the defined function.
+       #',full-name)))
 
 (defun python-django-qmgmt-kill-and-msg-callback (args)
   "Callback for commands to be cleaned up on finish.
@@ -1368,18 +1334,6 @@ Argument ARGS is an alist with the arguments passed to the management command."
   (message (or (cdr (assq :msg args)) (buffer-string)))
   (kill-buffer)
   (python-django-mgmt-restore-window-configuration))
-
-(defun python-django-qmgmt-add-menu-items ()
-  "Add menu items for defined quick commands."
-  (dolist (menu-item python-django-qmgmt--menu-items)
-    ;; Some security checks
-    (when (and (eq (car menu-item) 'easy-menu-add-item)
-               (eq (cadr menu-item) nil)
-               (listp (nth 2 menu-item))
-               (or
-                (vectorp (nth 3 menu-item))
-                (listp (nth 3 menu-item))))
-      (eval menu-item))))
 
 (python-django-qmgmt-define collectstatic
   "Collect static files."
@@ -1398,8 +1352,8 @@ Argument ARGS is an alist with the arguments passed to the management command."
 
 (python-django-qmgmt-define create_command
   "Create management commands directory structure for app."
-  (:submenu "Tools" :binding "occ" :no-pop t
-   (app (python-django-minibuffer-read-app "App name: "))))
+  (:submenu "Tools" :binding "occ" :no-pop t)
+  (app (python-django-minibuffer-read-app "App name: ")))
 
 (defun python-django-qmgmt-create_command-callback (args)
   "Callback for create_command quick management command.
@@ -1434,8 +1388,8 @@ Optional argument ARGS args for it."
 
 (python-django-qmgmt-define startapp
   "Create new Django app for current project."
-  (:submenu "Tools" :binding "osa" :no-pop t
-   (app "App name: ")))
+  (:submenu "Tools" :binding "osa" :no-pop t)
+  (app "App name: "))
 
 (defun python-django-qmgmt-startapp-callback (args)
   "Callback for clean_pyc quick management command.
@@ -1471,18 +1425,18 @@ Optional argument ARGS args for it."
 
 (python-django-qmgmt-define syncdb
   "Sync database tables for all INSTALLED_APPS."
-  (:submenu "Database" :binding "dsy" :no-pop t
-   (database (python-django-minibuffer-read-database "Database: " default)
-             "default" "--database=")))
+  (:submenu "Database" :binding "dsy" :no-pop t)
+  (database (python-django-minibuffer-read-database "Database: " default)
+            "default" "--database="))
 
 (defalias 'python-django-qmgmt-syncdb-callback
   'python-django-qmgmt-kill-and-msg-callback)
 
 (python-django-qmgmt-define dbshell
   "Run the command-line client for specified database."
-  (:submenu "Database" :binding "dss"
-   (database (python-django-minibuffer-read-database "Database: " default)
-             "default" "--database=")))
+  (:submenu "Database" :binding "dss")
+  (database (python-django-minibuffer-read-database "Database: " default)
+            "default" "--database="))
 
 (defvar python-django-qmgmt-dumpdata-formats '("json" "xml" "yaml")
   "Valid formats for dumpdata management command.")
@@ -1504,30 +1458,30 @@ Optional argument ARGS args for it."
 
 (python-django-qmgmt-define dumpdata-all
   "Save the contents of the database as a fixture for all apps."
-  (:submenu "Database" :binding "ddp" :no-pop t :capture-output t
-   (database (python-django-minibuffer-read-database "Database: " default)
-             "default" "--database=")
-   (indent (number-to-string
-            (read-number "Indent Level: "
-                         (string-to-number default)))
-           (number-to-string python-django-qmgmt-dumpdata-default-indent)
-           "--indent=")
-   (format (python-django-minibuffer-read-from-list
-            "Dump to format: " python-django-qmgmt-dumpdata-formats default)
-           "json" "--format=")))
+  (:submenu "Database" :binding "ddp" :no-pop t :capture-output t)
+  (database (python-django-minibuffer-read-database "Database: " default)
+            "default" "--database=")
+  (indent (number-to-string
+           (read-number "Indent Level: "
+                        (string-to-number default)))
+          (number-to-string python-django-qmgmt-dumpdata-default-indent)
+          "--indent=")
+  (format (python-django-minibuffer-read-from-list
+           "Dump to format: " python-django-qmgmt-dumpdata-formats default)
+          "json" "--format="))
 
 (python-django-qmgmt-define dumpdata-app
   "Save the contents of the database as a fixture for the specified app."
-  (:submenu "Database" :binding "dda" :no-pop t :capture-output t
-   (database (python-django-minibuffer-read-database "Database: " default)
-             "default" "--database=")
-   (indent (number-to-string
-            (read-number "Indent Level: "
-                         (string-to-number default))) "4" "--indent=")
-   (format (python-django-minibuffer-read-from-list
-            "Dump to format: " python-django-qmgmt-dumpdata-formats default)
-           "json" "--format=")
-   (app (python-django-minibuffer-read-app "Dumpdata for App: "))))
+  (:submenu "Database" :binding "dda" :no-pop t :capture-output t)
+  (database (python-django-minibuffer-read-database "Database: " default)
+            "default" "--database=")
+  (indent (number-to-string
+           (read-number "Indent Level: "
+                        (string-to-number default))) "4" "--indent=")
+  (format (python-django-minibuffer-read-from-list
+           "Dump to format: " python-django-qmgmt-dumpdata-formats default)
+          "json" "--format=")
+  (app (python-django-minibuffer-read-app "Dumpdata for App: ")))
 
 (defun python-django-qmgmt-dumpdata-callback (args)
   "Callback executed after dumpdata finishes.
@@ -1577,19 +1531,19 @@ management command."
 
 (python-django-qmgmt-define flush
   "Execute 'sqlflush' on the given database."
-  (:submenu "Database" :binding "df" :msg "Flushed database"
-   (database (python-django-minibuffer-read-database "Database: " default)
-             "default" "--database=")))
+  (:submenu "Database" :binding "df" :msg "Flushed database")
+  (database (python-django-minibuffer-read-database "Database: " default)
+            "default" "--database="))
 
 (defalias 'python-django-qmgmt-flush-callback
   'python-django-qmgmt-kill-and-msg-callback)
 
 (python-django-qmgmt-define loaddata
   "Install the named fixture(s) in the database."
-  (:submenu "Database" :binding "dl"
-   (database (python-django-minibuffer-read-database "Database: " default)
-             "default" "--database=")
-   (fixtures (python-django-minibuffer-read-file-names "Fixtures: "))))
+  (:submenu "Database" :binding "dl")
+  (database (python-django-minibuffer-read-database "Database: " default)
+            "default" "--database=")
+  (fixtures (python-django-minibuffer-read-file-names "Fixtures: ")))
 
 (defalias 'python-django-qmgmt-loaddata-callback
   'python-django-qmgmt-kill-and-msg-callback)
@@ -1603,24 +1557,24 @@ management command."
 
 (python-django-qmgmt-define graph_models-all
   "Creates a Graph of models for all project apps."
-  (:submenu "Database" :switches "-ag"  :binding "dgg"
-   (filename (read-file-name "Filename for generated Graph: "
-                             default default)
-             (expand-file-name
-              "graph_all.png" python-django-project-root)
-             "--output=" t)))
+  (:submenu "Database" :switches "-ag"  :binding "dgg")
+  (filename (read-file-name "Filename for generated Graph: "
+                            default default)
+            (expand-file-name
+             "graph_all.png" python-django-project-root)
+            "--output=" t))
 
 (python-django-qmgmt-define graph_models-apps
   "Creates a Graph of models for given apps."
-  (:submenu "Database" :binding "dga"
-   (apps (python-django-minibuffer-read-apps "Graph for App: "))
-   (filename
-    (expand-file-name
-     (read-file-name "Filename for generated Graph: " default default))
-    (expand-file-name
-     (format "graph_%s.png" (replace-regexp-in-string " " "_" apps))
-     python-django-project-root)
-    "--output=" t)))
+  (:submenu "Database" :binding "dga")
+  (apps (python-django-minibuffer-read-apps "Graph for App: "))
+  (filename
+   (expand-file-name
+    (read-file-name "Filename for generated Graph: " default default))
+   (expand-file-name
+    (format "graph_%s.png" (replace-regexp-in-string " " "_" apps))
+    python-django-project-root)
+   "--output=" t))
 
 (defun python-django-qmgmt-graph_models-callback (args)
   "Callback for graph_model quick management command.
@@ -1674,28 +1628,28 @@ Optional argument ARGS args for it."
 
 (python-django-qmgmt-define runserver
   "Start development Web server."
-  (:submenu "Server" :binding "rr"
-   (bindaddr "Serve on [ip]:[port]: "
-             python-django-qmgmt-runserver-default-bindaddr)))
+  (:submenu "Server" :binding "rr")
+  (bindaddr "Serve on [ip]:[port]: "
+            python-django-qmgmt-runserver-default-bindaddr))
 
 (python-django-qmgmt-define runserver_plus
   "Start extended development Web server."
-  (:submenu "Server" :binding "rp"
-   (bindaddr "Serve on [ip]:[port]: "
-             python-django-qmgmt-runserver-default-bindaddr)))
+  (:submenu "Server" :binding "rp")
+  (bindaddr "Serve on [ip]:[port]: "
+            python-django-qmgmt-runserver-default-bindaddr))
 
 (python-django-qmgmt-define testserver
   "Start development server with data from the given fixture(s)."
-  (:submenu "Server" :binding "rt"
-   (bindaddr "Serve on [ip]:[port]: "
-             python-django-qmgmt-testserver-default-bindaddr)
-   (fixtures (python-django-minibuffer-read-file-names "Fixtures: "))))
+  (:submenu "Server" :binding "rt")
+  (bindaddr "Serve on [ip]:[port]: "
+            python-django-qmgmt-testserver-default-bindaddr)
+  (fixtures (python-django-minibuffer-read-file-names "Fixtures: ")))
 
 (python-django-qmgmt-define mail_debug
   "Start a test mail server for development."
-  (:submenu "Server" :binding "rm"
-   (bindaddr "Serve on [ip]:[port]: "
-             python-django-qmgmt-mail_debug-default-bindaddr)))
+  (:submenu "Server" :binding "rm")
+  (bindaddr "Serve on [ip]:[port]: "
+            python-django-qmgmt-mail_debug-default-bindaddr))
 
 ;; Testing
 
@@ -1708,8 +1662,8 @@ Optional argument ARGS args for it."
 
 (python-django-qmgmt-define test-app
   "Run the test suite for the specified app."
-  (:submenu "Test" :binding "ta"
-   (app (python-django-minibuffer-read-app "Test App: "))))
+  (:submenu "Test" :binding "ta")
+  (app (python-django-minibuffer-read-app "Test App: ")))
 
 (defalias 'python-django-qmgmt-test-app-callback
   'python-django-qmgmt-kill-and-msg-callback)
@@ -1721,7 +1675,7 @@ Optional argument ARGS args for it."
 Argument ARGS is an alist with the arguments passed to the management command."
   (let ((app (cdr (assq 'app args))))
     (python-django-qmgmt-kill-and-msg-callback args)
-    (and (y-or-n-p "Open the created migration?: ")
+    (and (y-or-n-p "Open the created migration?:? ")
          (find-file
           (let ((app "cscfb"))
             (expand-file-name
@@ -1732,75 +1686,75 @@ Argument ARGS is an alist with the arguments passed to the management command."
 
 (python-django-qmgmt-define convert_to_south
   "Convert given app to South."
-  (:submenu "South" :binding "soc"
-   (app (python-django-minibuffer-read-app "Convert App: "))))
+  (:submenu "South" :binding "soc")
+  (app (python-django-minibuffer-read-app "Convert App: ")))
 
 (defalias 'python-django-qmgmt-convert_to_south-callback
   'python-django-qmgmt-kill-and-msg-callback)
 
 (python-django-qmgmt-define datamigration
   "Create a new datamigration for the given app."
-  (:submenu "South" :binding "sod"
-   (app (python-django-minibuffer-read-app "Datamigration for App: "))
-   (name "Datamigration name: ")))
+  (:submenu "South" :binding "sod")
+  (app (python-django-minibuffer-read-app "Datamigration for App: "))
+  (name "Datamigration name: "))
 
 (defalias 'python-django-qmgmt-datamigration-callback
   'python-django-qmgmt-open-migration-callback)
 
 (python-django-qmgmt-define migrate-all
   "Run all migrations for all apps."
-  (:submenu "South" :switches "--all" :binding "somp"
-   (database (python-django-minibuffer-read-database "Database: " default)
-             "default" "--database=")))
+  (:submenu "South" :switches "--all" :binding "somp")
+  (database (python-django-minibuffer-read-database "Database: " default)
+            "default" "--database="))
 
 (defalias 'python-django-qmgmt-migrate-all-callback
   'python-django-qmgmt-kill-and-msg-callback)
 
 (python-django-qmgmt-define migrate-app
   "Run all migrations for given app."
-  (:submenu "South" :binding "soma"
-   (database (python-django-minibuffer-read-database "Database: " default)
-             "default" "--database=")
-   (app (python-django-minibuffer-read-app "Migrate App: "))))
+  (:submenu "South" :binding "soma")
+  (database (python-django-minibuffer-read-database "Database: " default)
+            "default" "--database=")
+  (app (python-django-minibuffer-read-app "Migrate App: ")))
 
 (defalias 'python-django-qmgmt-migrate-app-callback
   'python-django-qmgmt-kill-and-msg-callback)
 
 (python-django-qmgmt-define migrate-app-to
   "Run migrations for given app [up|down]-to given number."
-  (:submenu "South" :binding "somt"
-   (database (python-django-minibuffer-read-database "Database: " default)
-             "default" "--database=")
-   (app (python-django-minibuffer-read-app "Migrate App: " nil t))
-   (migration (python-django-minibuffer-read-migration "To migration: " app))))
+  (:submenu "South" :binding "somt")
+  (database (python-django-minibuffer-read-database "Database: " default)
+            "default" "--database=")
+  (app (python-django-minibuffer-read-app "Migrate App: " nil t))
+  (migration (python-django-minibuffer-read-migration "To migration: " app)))
 
 (defalias 'python-django-qmgmt-migrate-app-to-callback
   'python-django-qmgmt-kill-and-msg-callback)
 
 (python-django-qmgmt-define schemamigration-initial
   "Create the initial schemamigration for the given app."
-  (:submenu "South" :switches "--initial" :binding "sosi"
-   (app (python-django-minibuffer-read-app
-         "Initial schemamigration for App: "))))
+  (:submenu "South" :switches "--initial" :binding "sosi")
+  (app (python-django-minibuffer-read-app
+        "Initial schemamigration for App: ")))
 
 (defalias 'python-django-qmgmt-schemamigration-initial-callback
   'python-django-qmgmt-kill-and-msg-callback)
 
 (python-django-qmgmt-define schemamigration
   "Create new empty schemamigration for the given app."
-  (:submenu "South" :switches "--empty" :binding "soss"
-   (app (python-django-minibuffer-read-app
-         "Initial schemamigration for App: "))
-   (name "Schemamigration name: ")))
+  (:submenu "South" :switches "--empty" :binding "soss")
+  (app (python-django-minibuffer-read-app
+        "Initial schemamigration for App: "))
+  (name "Schemamigration name: "))
 
 (defalias 'python-django-qmgmt-schemamigration-callback
   'python-django-qmgmt-open-migration-callback)
 
 (python-django-qmgmt-define schemamigration-auto
   "Create an automatic schemamigration for the given app."
-  (:submenu "South" :switches "--auto" :binding "sosa"
-   (app (python-django-minibuffer-read-app
-         "Auto schemamigration for App: "))))
+  (:submenu "South" :switches "--auto" :binding "sosa")
+  (app (python-django-minibuffer-read-app
+        "Auto schemamigration for App: ")))
 
 (defalias 'python-django-qmgmt-schemamigration-auto-callback
   'python-django-qmgmt-open-migration-callback)
@@ -2404,7 +2358,6 @@ settings module (the same happens when called with two or more
                    (executable-find python-django-python-executable))
                  (error-message-string err))))))
           (when success
-            (python-django-qmgmt-add-menu-items)
             (add-hook 'kill-buffer-hook
                       #'python-django-mode-on-kill-buffer nil t)
             (python-django-ui-beginning-of-widgets))
