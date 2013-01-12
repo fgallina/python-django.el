@@ -1093,7 +1093,7 @@ dumpdata for the current application quickly:
     (app \"App\"))
 
 When that's is evaled a command called
-`python-django-qmgmt-dumpdata' is created and will react
+`python-django-qmgmt-dumpdata-app' is created and will react
 depending on the arguments passed to this macro.
 
 All commands defined by this macro, when called with `prefix-arg'
@@ -1122,6 +1122,10 @@ ARGS is a property list.  Valid keys are (all optional):
     + :switches, when defined, the new command is executed with
     these fixed switches.
 
+If you define any extra keys they will not be taken into account
+by this macro but you may well use them in your command's
+callback.
+
 ISWITCHES have the form (VARNAME PROMPT DEFAULT SWITCH
 FORCE-ASK), you can add 0 or more ISWITCHES depending on the
 number of parameters you need to pass to the management command.
@@ -1148,7 +1152,17 @@ The description for each element of the list are:
 
     + FORCE-ASK might be nil or non-nil, when is non-nil the user
     will be asked to insert a value for VARNAME even if a default
-    value is available."
+    value is available.
+
+Each command defined via this macro may have a callback to be
+executed when the process finishes correctly.  The way to define
+callbacks is to append -callback to the defined name, for
+instance if you defined a quick management command called syncdb,
+then you need to create a function called
+`python-django-qmgmt-syncdb-callback' and it will be called with
+an alist containing all ISWITCHES and ARGS.  See the
+`python-django-qmgmt-kill-and-msg-callback' function for a nice
+example of a callback."
   (declare
    (indent defun))
   (let* ((docstring (and (stringp doc-or-args) doc-or-args))
@@ -1165,7 +1179,6 @@ The description for each element of the list are:
          (command (car (split-string (format "%s" name) "-")))
          (binding (plist-get args :binding))
          (capture-output (plist-get args :capture-output))
-         (msg (plist-get args :msg))
          (no-pop (plist-get args :no-pop))
          (quick-submenu (plist-get args :submenu))
          (switches (plist-get args :switches))
@@ -1294,8 +1307,13 @@ The description for each element of the list are:
                      (funcall cb)))
                (apply-partially
                 ',callback
-                (cons
-                 (cons :msg ,msg)
+                (append
+                 ;; Convert the args plist to an alist
+                 (mapcar (lambda (key)
+                           (cons key (plist-get ',args key)))
+                         (loop for i below (length ',args) by 2
+                               collect (nth i ',args)))
+                 ;; Retrieve all switches and commands.
                  (mapcar
                   #'(lambda (sym)
                       (let ((val (symbol-value sym)))
@@ -1307,7 +1325,7 @@ The description for each element of the list are:
                           ((string-match "^-" val)
                            (substring val 3))
                           (t val)))))
-                  ',defargs))))))))
+                  ',defargs) nil)))))))
        ;; Add the specified binding for this quick command.
        (and ,binding
             (ignore-errors
