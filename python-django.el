@@ -102,14 +102,12 @@
 (require 'json)
 (require 'python)
 (require 'sql)
-(require 'widget)
 (require 'tree-widget)
+(require 'wid-edit)
+(require 'widget)
 
-(eval-when-compile
-  (require 'cl)
-  (require 'wid-edit)
-  ;; Avoid compiler warnings
-  (defvar view-return-to-alist))
+;; Avoid compiler warnings
+(defvar view-return-to-alist)
 
 (defgroup python-django nil
   "Python Django project goodies."
@@ -1287,30 +1285,29 @@ The description for each element of the list are:
              ;; it an alist with all the user selected values as an
              ;; argument.  Then the callback is executed when the
              ;; process finishes correctly.
-             (lexical-let
-                 ((cb
-                   (apply-partially
-                    ',callback
-                    (cons
-                     (cons :msg ,msg)
-                     (mapcar
-                      #'(lambda (sym)
-                          (let ((val (symbol-value sym)))
-                            (cons
-                             sym
-                             (cond
-                              ((string-match "^--" val)
-                               (substring val (1+ (string-match "=" val))))
-                              ((string-match "^-" val)
-                               (substring val 3))
-                              (t val)))))
-                      ',defargs)))))
-               (set-process-sentinel
-                process
-                #'(lambda (process status)
-                    (when (string= status "finished\n")
-                      (set-buffer (process-buffer process))
-                      (funcall cb))))))))
+             (set-process-sentinel
+              process
+              (apply-partially
+               #'(lambda (cb process status)
+                   (when (string= status "finished\n")
+                     (set-buffer (process-buffer process))
+                     (funcall cb)))
+               (apply-partially
+                ',callback
+                (cons
+                 (cons :msg ,msg)
+                 (mapcar
+                  #'(lambda (sym)
+                      (let ((val (symbol-value sym)))
+                        (cons
+                         sym
+                         (cond
+                          ((string-match "^--" val)
+                           (substring val (1+ (string-match "=" val))))
+                          ((string-match "^-" val)
+                           (substring val 3))
+                          (t val)))))
+                  ',defargs))))))))
        ;; Add the specified binding for this quick command.
        (and ,binding
             (ignore-errors
