@@ -212,6 +212,31 @@
   "Keymap for `python-django-mode'.")
 
 
+;;; Main vars
+
+(defvar python-django-project-root nil
+  "Django project root directory.")
+
+(defvar python-django-project-manage.py nil
+  "Django project manage.py path.")
+
+(defvar python-django-project-settings nil
+  "Django project settings module.")
+
+(defvar python-django-project-name nil
+  "Django project name.")
+
+(define-obsolete-variable-alias
+  'python-django-settings-module
+  'python-django-project-settings
+  "24.2")
+
+(define-obsolete-variable-alias
+  'python-django-info-project-name
+  'python-django-project-name
+  "24.2")
+
+
 ;;; Some utility variables
 
 ;;; XXX: This might be moved to python.el itself.
@@ -284,7 +309,7 @@ This function is intended to be used so the project buffer gets
 the same variables of python files."
   (let* ((file-name
           (expand-file-name
-           python-django-info-manage.py-path))
+           python-django-project-manage.py))
          (manage.py-exists (get-file-buffer file-name))
          (flymake-start-syntax-check-on-find-file nil)
          (manage.py-buffer
@@ -302,9 +327,9 @@ the same variables of python files."
             (string-match "^python-" (symbol-name (car pair)))
             (not (memq (car pair)
                        '(python-django-project-root
-                         python-django-settings-module
-                         python-django-info-project-name
-                         python-django-info-manage.py-path)))
+                         python-django-project-settings
+                         python-django-project-name
+                         python-django-project-manage.py)))
             (set (make-local-variable (car pair))
                  (cdr pair))))
      (buffer-local-variables manage.py-buffer))
@@ -361,7 +386,7 @@ the same variables of python files."
     (shell-command-to-string
      (format "%s %s help%s"
              (executable-find python-django-python-executable)
-             python-django-info-manage.py-path
+             python-django-project-manage.py
              (or (and command (concat " " command)) "")))))
 
 (defun python-django-help (&optional command show-help)
@@ -384,18 +409,6 @@ Optional argument SHOW-HELP when non-nil causes the help buffer to pop."
 
 ;;; Project info
 
-(defvar python-django-project-root nil
-  "Django project root directory.")
-
-(defvar python-django-info-manage.py-path nil
-  "Django project manage.py path.")
-
-(defvar python-django-settings-module nil
-  "Django project settings module.")
-
-(defvar python-django-info-project-name nil
-  "Django project name.")
-
 (defun python-django-info-calculate-process-environment ()
   "Calculate process environment given current Django project."
   (let* ((process-environment (python-shell-calculate-process-environment))
@@ -413,7 +426,7 @@ Optional argument SHOW-HELP when non-nil causes the help buffer to pop."
                                    path-separator
                                    project-pythonpath)))
     (setenv "DJANGO_SETTINGS_MODULE"
-            python-django-settings-module)
+            python-django-project-settings)
     process-environment))
 
 (defun python-django-info-find-manage.py (&optional dir)
@@ -1002,7 +1015,7 @@ displayed automatically."
           (replace-regexp-in-string
            "[\t ]+$" ""
            (format "[Django %s] ./manage.py %s %s"
-                   python-django-info-project-name
+                   python-django-project-name
                    command args)))
          (buffer-name (format "*%s*" process-name))
          (current-buffer (current-buffer))
@@ -1011,7 +1024,7 @@ displayed automatically."
            (format "python-django-mgmt-make-comint-for-%s" command)))
          (full-command
           (format "%s %s %s"
-                  python-django-info-manage.py-path
+                  python-django-project-manage.py
                   command args)))
     (if (not (fboundp make-comint-special-func-name))
         (python-django-mgmt-make-comint full-command process-name)
@@ -1053,7 +1066,7 @@ When called with universal argument you can filter the COMMAND to kill."
    (list
     (y-or-n-p
      (format "Do you want to kill all running commands for %s? "
-             python-django-info-project-name))
+             python-django-project-name))
     (and current-prefix-arg
          (python-django-minibuffer-read-command nil))))
   (when confirm
@@ -1378,7 +1391,7 @@ Optional argument ARGS args for it."
           (file-name-directory
            (with-current-buffer
                python-django-mgmt-parent-buffer
-             python-django-info-manage.py-path)))
+             python-django-project-manage.py)))
          (default-app-dir
            (expand-file-name appname manage-directory))
          (default-create-dir
@@ -1414,7 +1427,7 @@ Optional argument ARGS args for it."
          (file-name-directory
           (with-current-buffer
               python-django-mgmt-parent-buffer
-            python-django-info-manage.py-path))))
+            python-django-project-manage.py))))
     (when (y-or-n-p
            (format
             "App created in %s.  Do you want to move it? "
@@ -1796,7 +1809,7 @@ default to a sane value."
   (let ((current-dir default-directory))
     (cd
      (file-name-directory
-      python-django-info-manage.py-path))
+      python-django-project-manage.py))
     (if (eq 0
             (shell-command
              python-django-cmd-etags-command))
@@ -1810,7 +1823,7 @@ default to a sane value."
   (let ((default-directory
           (or (python-django-ui-directory-at-point)
               (file-name-directory
-               python-django-info-manage.py-path))))
+               python-django-project-manage.py))))
     (if (not python-django-cmd-grep-function)
         (call-interactively #'rgrep)
       (funcall
@@ -1828,7 +1841,7 @@ default to a sane value."
   "Visit settings file."
   (interactive)
   (find-file (python-django-info-module-path
-              python-django-settings-module)))
+              python-django-project-settings)))
 
 (defun python-django-cmd-visit-virtualenv ()
   "Visit virtualenv directory."
@@ -1952,7 +1965,7 @@ The function receives one argument, the status buffer."
             "Settings:"
             'face 'python-django-face-title)
            (propertize
-            python-django-settings-module
+            python-django-project-settings
             'face 'python-django-face-settings-module))
    (format "%s\t\t%s"
            (propertize
@@ -2091,7 +2104,7 @@ With positive ARG move forward that many times, else backwards."
             (setq success-moves (1+ success-moves))))))
     (setq default-directory
           (or (python-django-ui-directory-at-point)
-              (file-name-directory python-django-info-manage.py-path)))))
+              (file-name-directory python-django-project-manage.py)))))
 
 (defun python-django-ui-widget-forward (arg)
   "Move point to the next field or button.
@@ -2214,8 +2227,8 @@ With optional ARG, move across that many fields."
   :safe (lambda (val)
           (and
            (stringp (car val))
-           (stringp (cadr val))
-           (stringp (caddr val)))))
+           (stringp (nth 1 val))
+           (stringp (nth 2 val)))))
 
 (defun python-django-mode-find-buffer (&optional project-name no-match)
   "Find Django project buffer.
@@ -2229,9 +2242,9 @@ buffers that belong to PROJECT-NAME."
                     (if no-match
                         (not
                          (string= project-name
-                                  python-django-info-project-name))
+                                  python-django-project-name))
                       (string= project-name
-                               python-django-info-project-name)))))
+                               python-django-project-name)))))
          (return buf))))
 
 (defun python-django-mode-on-kill-buffer ()
@@ -2259,7 +2272,7 @@ an opened project-buffer, if current buffer is already a project
 buffer it will cycle to next opened project.  If no project
 buffers are found, then the user prompted for the project path
 and settings module unless `python-django-project-root' and
-`python-django-settings-module' are somehow set, normally via
+`python-django-project-settings' are somehow set, normally via
 directory local variables.  If none of the above matched or the
 function is called with one `prefix-arg' and there are projects
 defined in the `python-django-known-projects' variable the user
@@ -2272,16 +2285,16 @@ settings module (the same happens when called with two or more
           ;; Get an existing project buffer that's not the current.
           (python-django-mode-find-buffer
            (and (eq major-mode 'python-django-mode)
-                python-django-info-project-name) t)))
+                python-django-project-name) t)))
      (cond
       ((and (not current-prefix-arg)
             (not buf)
             python-django-project-root
-            python-django-settings-module)
+            python-django-project-settings)
        ;; There's no existing buffer but project variables are
        ;; set, so use them to open the project.
        (list python-django-project-root
-             python-django-settings-module
+             python-django-project-settings
              ;; if the user happens to be in the project buffer
              ;; itself, do nothing.
              (and (eq major-mode 'python-django-mode)
@@ -2291,7 +2304,7 @@ settings module (the same happens when called with two or more
        (with-current-buffer buf
          (list
           python-django-project-root
-          python-django-settings-module
+          python-django-project-settings
           buf)))
       ((or (and python-django-known-projects
                 (<= (prefix-numeric-value current-prefix-arg) 4)))
@@ -2311,7 +2324,7 @@ settings module (the same happens when called with two or more
                       "Project Root: " python-django-project-root nil t))
           (read-string
            "Settings module: "
-           (or python-django-settings-module
+           (or python-django-project-settings
                (format "%s.settings"
                        (python-django-info-directory-basename root))))))))))
   (if (not existing)
@@ -2331,15 +2344,15 @@ settings module (the same happens when called with two or more
             (set (make-local-variable
                   'python-django-project-root) directory)
             (set (make-local-variable
-                  'python-django-settings-module) settings)
+                  'python-django-project-settings) settings)
             (set (make-local-variable
-                  'python-django-info-project-name) project-name)
+                  'python-django-project-name) project-name)
             (set (make-local-variable
-                  'python-django-info-manage.py-path)
+                  'python-django-project-manage.py)
                  (python-django-info-find-manage.py directory))
             (set (make-local-variable 'default-directory)
                  (file-name-directory
-                  python-django-info-manage.py-path))
+                  python-django-project-manage.py))
             (python-django-util-clone-local-variables)
             (python-django-ui-insert-header)
             (set (make-local-variable 'tree-widget-image-enable)
@@ -2360,12 +2373,12 @@ settings module (the same happens when called with two or more
                   "Check your project settings and try again:\n\n"
                   "Current values:\n"
                   "  + python-django-project-root: %s\n"
-                  "  + python-django-settings-module: %s\n"
+                  "  + python-django-project-settings: %s\n"
                   "  + python-django-python-executable: %s\n"
                   "    - found in %s\n\n\n"
                   "Error: %s \n")
                  python-django-project-root
-                 python-django-settings-module
+                 python-django-project-settings
                  python-django-python-executable
                  (let* ((process-environment
                          (python-django-info-calculate-process-environment))
@@ -2391,7 +2404,7 @@ With a prefix argument, KILL-BUFFER instead."
   (interactive)
   (python-django-open-project
    python-django-project-root
-   python-django-settings-module))
+   python-django-project-settings))
 
 (provide 'python-django)
 
