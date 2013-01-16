@@ -439,9 +439,9 @@ Optional argument SHOW-HELP when non-nil causes the help buffer to pop."
          (not
           (and (memq system-type '(windows-nt ms-dos))
                (string-match "\\`[a-zA-Z]:[/\\]\\'" dir)))
-          (python-django-info-find-manage.py
-           (expand-file-name
-            (file-name-as-directory "..") dir)))
+         (python-django-info-find-manage.py
+          (expand-file-name
+           (file-name-as-directory "..") dir)))
       (expand-file-name "manage.py" dir))))
 
 (defvar python-django-info-prefetched-settings
@@ -822,11 +822,11 @@ Optional argument INITIAL-INPUT is the initial prompted value."
           (python-util-clone-local-variables current-buffer)
           (setq minibuffer-completion-table databases))
       (catch 'db
-      (while t
-        (let ((db (read-from-minibuffer
-                   prompt initial-input minibuffer-local-must-match-map)))
-          (when (> (length db) 0)
-            (throw 'db db))))))))
+        (while t
+          (let ((db (read-from-minibuffer
+                     prompt initial-input minibuffer-local-must-match-map)))
+            (when (> (length db) 0)
+              (throw 'db db))))))))
 
 (defun python-django-minibuffer-read-migration (prompt app)
   "Read south migration number for given app from minibuffer.
@@ -999,10 +999,10 @@ captured in the variable `python-django-mgmt-output-buffer'.  If
 optional argument NO-POP is provided the process buffer is not
 displayed automatically."
   (interactive
-     (list
-      (setq command
-            (python-django-minibuffer-read-command t))
-      (python-django-minibuffer-read-command-args command)))
+   (list
+    (setq command
+          (python-django-minibuffer-read-command t))
+    (python-django-minibuffer-read-command-args command)))
   (python-django-help-close)
   (when (not (member command (python-django-mgmt-list-commands)))
     (error
@@ -1086,7 +1086,8 @@ When called with universal argument you can filter the COMMAND to kill."
 
 ;;; Management shortcuts
 
-(defmacro python-django-qmgmt-define (name doc-or-args &optional args &rest iswitches)
+(defmacro python-django-qmgmt-define (name doc-or-args
+                                           &optional args &rest iswitches)
   "Define a quick management command.
 Argument NAME is a symbol and it is used to calculate the
 management command this command will execute, so it should have
@@ -1373,7 +1374,7 @@ Argument ARGS is an alist with the arguments passed to the management command."
 (python-django-qmgmt-define clean_pyc
   "Remove all python compiled files from the project."
   (:submenu "Tools" :binding "ocp" :no-pop t
-   :msg "All *.pyc and *.pyo cleaned."))
+            :msg "All *.pyc and *.pyo cleaned."))
 
 (defalias 'python-django-qmgmt-clean_pyc-callback
   'python-django-qmgmt-kill-and-msg-callback)
