@@ -122,8 +122,8 @@
     (suppress-keymap map t)
     (define-key map [remap next-line] 'python-django-ui-widget-forward)
     (define-key map [remap previous-line] 'python-django-ui-widget-backward)
-    (define-key map [remap forward-char] 'python-django-ui-widget-forward)
-    (define-key map [remap backward-char] 'python-django-ui-widget-backward)
+    (define-key map [remap forward-char] 'widget-forward)
+    (define-key map [remap backward-char] 'widget-backward)
     (define-key map [remap beginning-of-buffer]
       'python-django-ui-beginning-of-widgets)
     (define-key map [remap newline] 'python-django-ui-safe-button-press)
@@ -131,8 +131,8 @@
     (define-key map [remap widget-backward] 'python-django-ui-safe-button-press)
     (define-key map (kbd "p") 'python-django-ui-widget-backward)
     (define-key map (kbd "n") 'python-django-ui-widget-forward)
-    (define-key map (kbd "b") 'python-django-ui-widget-backward)
-    (define-key map (kbd "f") 'python-django-ui-widget-forward)
+    (define-key map (kbd "b") 'widget-backward)
+    (define-key map (kbd "f") 'widget-forward)
     (define-key map (kbd "d") 'python-django-cmd-dired-at-point)
     (define-key map (kbd "w") 'python-django-cmd-directory-at-point)
     (define-key map (kbd "ja") 'python-django-cmd-jump-to-app)
@@ -2061,7 +2061,7 @@ Optional argument IGNORE is there for compatibility."
                        :file ,(expand-file-name file dir)
                        :node (python-django-ui-tree-file-widget
                               :tag ,file
-                              :file ,file)))
+                              :file ,(expand-file-name file dir))))
                    dir-list)
            (mapcar (lambda (file)
                      `(python-django-ui-tree-file-widget
@@ -2086,8 +2086,10 @@ Argument NODE and IGNORE are just for compatibility."
            :open t)))
 
 (defun python-django-ui-widget-move (arg)
-  "Widget movement.
-With positive ARG move forward that many times, else backwards."
+  "Move between widgets sensibly in the project buffer.
+Movement between widgets of the tree happen line by line, leaving
+point next to the closest icon available.  With positive ARG move
+forward that many times, else backwards."
   (let* ((success-moves 0)
          (forward (> arg 0))
          (func (if forward
@@ -2096,24 +2098,29 @@ With positive ARG move forward that many times, else backwards."
          (abs-arg (abs arg)))
     (catch 'nowidget
       (while (> abs-arg success-moves)
-        (ignore-errors (funcall func 1))
-        (let ((widget (widget-at (point))))
-          (when (not widget)
-            (throw 'nowidget t))
-          (when (eq (widget-get widget :help-echo) 'tree-widget-icon-help-echo)
-            (setq success-moves (1+ success-moves))))))
+        (if (memq (widget-type (widget-at (point)))
+                  '(tree-widget-close-icon
+                    tree-widget-empty-icon
+                    tree-widget-leaf-icon
+                    tree-widget-open-icon))
+            (ignore-errors (funcall func 2))
+          (ignore-errors (funcall func 1)))
+        (when (not (widget-at (point)))
+          (throw 'nowidget t))
+        (setq success-moves (1+ success-moves))))
+    (python-django-ui-move-to-closest-icon)
     (setq default-directory
           (or (python-django-ui-directory-at-point)
               (file-name-directory python-django-project-manage.py)))))
 
 (defun python-django-ui-widget-forward (arg)
-  "Move point to the next field or button.
+  "Move point to the next line's main widget.
 With optional ARG, move across that many fields."
   (interactive "p")
   (python-django-ui-widget-move arg))
 
 (defun python-django-ui-widget-backward (arg)
-  "Move point to the previous field or button.
+  "Move point to the previous line's main widget.
 With optional ARG, move across that many fields."
   (interactive "p")
   (python-django-ui-widget-move (- arg)))
@@ -2158,21 +2165,24 @@ With optional ARG, move across that many fields."
   (python-django-ui-widget-backward 1))
 
 (defun python-django-ui-move-to-closest-icon ()
-  "Move to closest open/close icon from point."
+  "Move to closest button from point."
   (interactive)
-  (let ((widget (widget-at (point))))
-    (when (not (member
-                (car widget)
-                '(tree-widget-close-icon
-                  tree-widget-empty-icon
-                  tree-widget-leaf-icon
-                  tree-widget-open-icon)))
-      (python-django-ui-widget-forward -1))))
+  (if (and
+       (not (widget-at (point)))
+       (not (widget-at (1- (point)))))
+      (progn
+        (widget-backward 1)
+        (beginning-of-line 1)
+        (widget-forward 1))
+    (beginning-of-line 1)
+    (and (not (widget-at (point)))
+         (widget-forward 1))))
 
 (defun python-django-ui-safe-button-press ()
-  "Move to closest open/close icon from point and press it."
+  "Move to closest button from point and press it."
   (interactive)
-  (python-django-ui-move-to-closest-icon)
+  (and (not (widget-at (point)))
+       (python-django-ui-move-to-closest-icon))
   (widget-button-press (point)))
 
 (defvar python-django-ui-cycle-mgmt-opened-buffers-index 0)
