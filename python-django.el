@@ -127,6 +127,7 @@
     (define-key map [remap beginning-of-buffer]
       'python-django-ui-beginning-of-widgets)
     (define-key map [remap newline] 'python-django-ui-safe-button-press)
+    (define-key map (kbd "^") 'python-django-ui-move-up-tree)
     (define-key map (kbd "p") 'python-django-ui-widget-backward)
     (define-key map (kbd "n") 'python-django-ui-widget-forward)
     (define-key map (kbd "b") 'widget-backward)
