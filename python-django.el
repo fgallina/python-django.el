@@ -2124,40 +2124,26 @@ With optional ARG, move across that many fields."
   (interactive "p")
   (python-django-ui-widget-move (- arg)))
 
-(defun python-django-ui-parent-widget-move (arg)
-  "Widget movement.
-With positive ARG move forward that many times, else backwards."
-  (python-django-ui-widget-forward 1)
-  (python-django-ui-widget-backward 1)
-  (let ((start-depth (- (point) (line-beginning-position)))
-        (func (if (>= 0 arg)
-                  'python-django-ui-widget-backward
-                'python-django-ui-widget-forward)))
+(defun python-django-ui-move-up-tree (arg)
+  "Move point to the parent widget of the tree.
+With optional ARG, move across that many fields."
+  (interactive "p")
+  (and (< arg 0) (setq arg (- arg)))
+  (python-django-ui-move-to-closest-icon)
+  (let ((start-depth (- (point) (line-beginning-position))))
     (when (not (= 0 start-depth))
       (while (<= start-depth (- (point) (line-beginning-position)))
-        (funcall func 1)))))
-
-(defun python-django-ui-parent-widget-forward (arg)
-  "Move point to the next field or button.
-With optional ARG, move across that many fields."
-  (interactive "p")
-  (python-django-ui-parent-widget-move arg))
-
-(defun python-django-ui-parent-widget-backward (arg)
-  "Move point to the previous field or button.
-With optional ARG, move across that many fields."
-  (interactive "p")
-  (python-django-ui-parent-widget-move (- arg)))
+        (python-django-ui-widget-backward 1)))))
 
 (defun python-django-ui-beginning-of-widgets ()
-  "Move point to the previous field or button.
+  "Move to the first widget.
 With optional ARG, move across that many fields."
   (interactive)
   (goto-char (point-min))
   (python-django-ui-widget-forward 1))
 
 (defun python-django-ui-end-of-widgets ()
-  "Move point to the previous field or button.
+  "Move point to last widget.
 With optional ARG, move across that many fields."
   (interactive)
   (goto-char (point-max))
