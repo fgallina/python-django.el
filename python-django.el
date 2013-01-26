@@ -147,11 +147,10 @@
     (define-key map (kbd "m") 'python-django-mgmt-run-command)
     (define-key map (kbd "g") 'python-django-refresh-project)
     (define-key map (kbd "q") 'python-django-close-project)
+    (define-key map (kbd "k") 'python-django-mgmt-kill)
     (define-key map (kbd "K") 'python-django-mgmt-kill-all)
-    (define-key map (kbd "$")
-      'python-django-ui-cycle-mgmt-opened-buffers-forward)
-    (define-key map (kbd "#")
-      'python-django-ui-cycle-mgmt-opened-buffers-backward)
+    (define-key map (kbd "$") 'python-django-mgmt-cycle-buffers-forward)
+    (define-key map (kbd "#") 'python-django-mgmt-cycle-buffers-backward)
     (easy-menu-define python-django-menu map "Python Django Mode menu"
       `("Django"
         :help "Django project tools"
@@ -985,10 +984,41 @@ This variable is for internal purposes, don't use it directly.")
 (defvar python-django-mgmt--opened-buffers nil
   "Alist of currently opened process buffers.")
 
-(defun python-django-mgmt-opened-buffers-for (parent-buffer)
-  "Return all opened buffer names for PARENT-BUFFER."
+(defun python-django-mgmt-buffer-list (&optional parent-buffer)
+  "Return all opened buffer names for PARENT-BUFFER.
+Optional Argument PARENT-BUFFER defaults to the current buffer."
   (python-django-util-alist-get
-   parent-buffer python-django-mgmt--opened-buffers))
+   (or parent-buffer (current-buffer))
+   python-django-mgmt--opened-buffers))
+
+(defvar python-django-mgmt--buffer-index 0)
+
+(defun python-django-mgmt-buffer-get (&optional index)
+  "Get management buffer by INDEX.
+Optional Argument INDEX defaults to the value of
+`python-django-mgmt--buffer-index'."
+  (let ((buffer-list (python-django-mgmt-buffer-list)))
+    (and buffer-list
+         (nth (mod (or index python-django-mgmt--buffer-index)
+                   (length buffer-list)) buffer-list))))
+
+(defun python-django-mgmt-cycle-buffers-forward (&optional arg)
+  "Cycle opened process buffers forward.
+With Optional Argument ARG cycle that many buffers."
+  (interactive "P")
+  (setq arg (or arg 1))
+  (let ((buffers (python-django-mgmt-buffer-list)))
+    (and buffers
+         (let ((newindex (mod arg (length buffers))))
+           (set (make-local-variable
+                 'python-django-mgmt--buffer-index) newindex)
+           (display-buffer (nth newindex  buffers))))))
+
+(defun python-django-mgmt-cycle-buffers-backward (&optional arg)
+  "Cycle opened process buffers backward.
+With Optional Argument ARG cycle that many buffers."
+  (interactive "P")
+  (python-django-mgmt-cycle-buffers-forward (- (or arg 1))))
 
 (defun python-django-mgmt-run-command (command
                                        &optional args capture-ouput no-pop)
@@ -1058,28 +1088,40 @@ displayed automatically."
 (add-to-list 'debug-ignored-errors
              "^Management command .* is not available in current project.")
 
-(defun python-django-mgmt-kill-all (&optional confirm command)
+(defun python-django-mgmt-kill (&optional buffer)
+  "Kill current command's BUFFER."
+  (interactive)
+  (setq buffer (or buffer (python-django-mgmt-buffer-get)))
+  (when (and buffer (or (not (called-interactively-p 'any))
+                        (y-or-n-p
+                         (format "Kill %s? " buffer))))
+    (let ((win (get-buffer-window buffer 0))
+          (proc (get-buffer-process buffer)))
+      (and win (delete-window win))
+      (and proc (set-process-query-on-exit-flag proc nil))
+      (kill-buffer buffer)
+      (python-django-mgmt-cycle-buffers-forward))))
+
+(defun python-django-mgmt-kill-all (&optional command)
   "Kill all running commands for current project after CONFIRM.
 When called with universal argument you can filter the COMMAND to kill."
   (interactive
    (list
-    (y-or-n-p
-     (format "Do you want to kill all running commands for %s? "
-             python-django-project-name))
     (and current-prefix-arg
          (python-django-minibuffer-read-command nil))))
-  (when confirm
+  (when (or (not (called-interactively-p 'any))
+            (y-or-n-p
+             (format "Do you want to kill all running commands for %s? "
+                     python-django-project-name)))
     (dolist (buffer
-             (python-django-mgmt-opened-buffers-for (current-buffer)))
+             (python-django-mgmt-buffer-list (current-buffer)))
       (when (or (not command)
                 (string-match
                  (format "\\./manage.py %s" (or command "")) buffer))
         (let ((win (get-buffer-window buffer 0))
               (proc (get-buffer-process buffer)))
-          (when win
-            (delete-window win))
-          (when proc
-            (set-process-query-on-exit-flag proc nil)))
+          (and win (delete-window win))
+          (and proc (set-process-query-on-exit-flag proc nil)))
         (kill-buffer buffer)))))
 
 
@@ -2171,35 +2213,6 @@ With optional ARG, move across that many fields."
        (python-django-ui-move-to-closest-icon))
   (widget-button-press (point)))
 
-(defvar python-django-ui-cycle-mgmt-opened-buffers-index 0)
-
-(defun python-django-ui-cycle-mgmt-opened-buffers-forward ()
-  "Cycle opened process buffers forward."
-  (interactive)
-  (let* ((buffers (python-django-mgmt-opened-buffers-for (current-buffer)))
-         (newindex
-          (if (= (length buffers)
-                 (1+ python-django-ui-cycle-mgmt-opened-buffers-index))
-              0
-            (1+ python-django-ui-cycle-mgmt-opened-buffers-index))))
-    (when buffers
-      (set (make-local-variable
-            'python-django-ui-cycle-mgmt-opened-buffers-index) newindex)
-      (display-buffer (nth newindex buffers)))))
-
-(defun python-django-ui-cycle-mgmt-opened-buffers-backward ()
-  "Cycle opened process buffers backward."
-  (interactive)
-  (let* ((buffers (python-django-mgmt-opened-buffers-for (current-buffer)))
-         (newindex
-          (if (= python-django-ui-cycle-mgmt-opened-buffers-index 0)
-              (1- (length buffers))
-            (1- python-django-ui-cycle-mgmt-opened-buffers-index))))
-    (when buffers
-      (set (make-local-variable
-            'python-django-ui-cycle-mgmt-opened-buffers-index) newindex)
-      (display-buffer (nth newindex buffers)))))
-
 (defun python-django-ui-widget-type-at-point ()
   "Return the node type for current position."
   (let* ((widget (widget-at (point)))
@@ -2245,7 +2258,7 @@ buffers that belong to PROJECT-NAME."
 
 (defun python-django-mode-on-kill-buffer ()
   "Hook run on `buffer-kill-hook'."
-  (and (python-django-mgmt-opened-buffers-for (current-buffer))
+  (and (python-django-mgmt-buffer-list (current-buffer))
        (call-interactively 'python-django-mgmt-kill-all)))
 
 (define-derived-mode python-django-mode special-mode "Django"
