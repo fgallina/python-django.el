@@ -163,10 +163,10 @@
         ["Get command help" python-django-help
          :help "Get help for any project's management commands"]
         ["Cycle to next running management command"
-         python-django-ui-cycle-mgmt-opened-buffers-forward
+         python-django-mgmt-cycle-buffers-forward
          :help "Cycle to next running management command"]
         ["Cycle to previous running management command"
-         python-django-ui-cycle-mgmt-opened-buffers-backward
+         python-django-mgmt-cycle-buffers-backward
          :help "Cycle to previous running management command"]
         "--"
         ;; Reserved for quick management commands
