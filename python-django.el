@@ -86,8 +86,10 @@
 ;; project root, is to use the directory containing your settings
 ;; module; for instance if your settings module is in
 ;; /path/django/settings.py, use /path/django/ as your project path
-;; and django.settings as your settings module.  Double check the
-;; `python-django-python-executable' really matches yours.
+;; and django.settings as your settings module.  Remember to always
+;; set `python-shell-interpreter' to either python or python2 and
+;; never use iPython directly as Django enables it automatically when
+;; the shell is started.
 
 ;;; Installation:
 
@@ -235,15 +237,6 @@
   "24.2")
 
 
-;;; Some utility variables
-
-;;; XXX: This might be moved to python.el itself.
-(defcustom python-django-python-executable "python"
-  "Python executable used in project."
-  :group 'python-django
-  :type 'string)
-
-
 ;;; Faces
 
 (defgroup python-django-faces nil
@@ -383,7 +376,7 @@ the same variables of python files."
          (exec-path (python-shell-calculate-exec-path)))
     (shell-command-to-string
      (format "%s %s help%s"
-             (executable-find python-django-python-executable)
+             (executable-find python-shell-interpreter)
              python-django-project-manage.py
              (or (and command (concat " " command)) "")))))
 
@@ -465,7 +458,7 @@ non-nil the cached value is invalidated."
      (shell-command-to-string
       (format
        "%s -c \"%s\""
-       python-shell-interpreter
+       (executable-find python-shell-interpreter)
        (concat
         "from __future__ import print_function;"
         "import django; print(django.get_version(), end='')"))))))
@@ -494,7 +487,7 @@ non-nil the cached value is invalidated."
               (json-read-from-string
                (shell-command-to-string
                 (format "%s -c \"%s %s\""
-                        (executable-find python-django-python-executable)
+                        (executable-find python-shell-interpreter)
                         (concat "from __future__ import print_function;"
                                 "from django.conf import settings;"
                                 "from django.utils import simplejson;"
@@ -538,7 +531,7 @@ non-nil the cached value is invalidated."
                (shell-command-to-string
                 (format
                  "%s -c \"%s %s %s %s\""
-                 (executable-find python-django-python-executable)
+                 (executable-find python-shell-interpreter)
                  "from __future__ import print_function;"
                  "from django.conf import settings;"
                  "from django.utils import simplejson;"
@@ -572,7 +565,7 @@ non-nil the cached value is invalidated."
          (json-read-from-string
           (shell-command-to-string
            (format "%s -c \"%s %s\""
-                   (executable-find python-django-python-executable)
+                   (executable-find python-shell-interpreter)
                    (concat "from __future__ import print_function;"
                            "from django.conf import settings;"
                            "from django.utils import simplejson;"
@@ -613,7 +606,7 @@ non-nil the cached value is invalidated."
     (shell-command-to-string
      (format
       "%s -c \"%s %s %s\""
-      python-shell-interpreter
+      (executable-find python-shell-interpreter)
       "from __future__ import print_function;"
       (format "import os.path; import %s;" module)
       (format "print(%s.__file__.replace('.pyc', '.py'), end='')" module)))))
@@ -902,7 +895,7 @@ the `python-django-mgmt--available-commands' cache."
 (defun python-django-mgmt-make-comint (command process-name)
   "Run COMMAND with PROCESS-NAME in generic Comint buffer."
   (apply 'make-comint process-name
-         python-shell-interpreter nil
+         (executable-find python-shell-interpreter) nil
          (split-string-and-unquote command)))
 
 (defun python-django-mgmt-make-comint-for-shell (command process-name)
@@ -2383,16 +2376,16 @@ settings module (the same happens when called with two or more
                   "Current values:\n"
                   "  + python-django-project-root: %s\n"
                   "  + python-django-project-settings: %s\n"
-                  "  + python-django-python-executable: %s\n"
+                  "  + python-shell-interpreter: %s\n"
                   "    - found in %s\n\n\n"
                   "Error: %s \n")
                  python-django-project-root
                  python-django-project-settings
-                 python-django-python-executable
+                 python-shell-interpreter
                  (let* ((process-environment
                          (python-django-info-calculate-process-environment))
                         (exec-path (python-shell-calculate-exec-path)))
-                   (executable-find python-django-python-executable))
+                   (executable-find python-shell-interpreter))
                  (error-message-string err))))))
           (when success
             (add-hook 'kill-buffer-hook
