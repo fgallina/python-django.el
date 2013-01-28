@@ -1742,17 +1742,17 @@ Optional argument ARGS args for it."
 
 (defun python-django-qmgmt-open-migration-callback (args)
   "Callback for commands that create migrations.
-Argument ARGS is an alist with the arguments passed to the management command."
+Argument ARGS is an alist with the arguments passed to the
+management command."
   (let ((app (cdr (assq 'app args))))
     (python-django-qmgmt-kill-and-msg-callback args)
-    (and (y-or-n-p "Open the created migration?:? ")
+    (and (y-or-n-p "Open the created migration? ")
          (find-file
-          (let ((app "cscfb"))
-            (expand-file-name
-             (car (last (python-django-info-get-app-migrations app)))
-             (expand-file-name
-              "migrations"
-              (python-django-info-get-app-path app))))))))
+          (expand-file-name
+           (car (last (python-django-info-get-app-migrations app)))
+           (expand-file-name
+            "migrations"
+            (python-django-info-get-app-path app)))))))
 
 (python-django-qmgmt-define convert_to_south
   "Convert given app to South."
