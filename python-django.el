@@ -998,7 +998,7 @@ Optional Argument INDEX defaults to the value of
 (defun python-django-mgmt-cycle-buffers-forward (&optional arg)
   "Cycle opened process buffers forward.
 With Optional Argument ARG cycle that many buffers."
-  (interactive "P")
+  (interactive "p")
   (setq arg (or arg 1))
   (let ((buffers (python-django-mgmt-buffer-list)))
     (and buffers
@@ -1012,7 +1012,7 @@ With Optional Argument ARG cycle that many buffers."
 (defun python-django-mgmt-cycle-buffers-backward (&optional arg)
   "Cycle opened process buffers backward.
 With Optional Argument ARG cycle that many buffers."
-  (interactive "P")
+  (interactive "p")
   (python-django-mgmt-cycle-buffers-forward (- (or arg 1))))
 
 (defun python-django-mgmt-run-command (command
