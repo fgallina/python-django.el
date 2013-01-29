@@ -1002,7 +1002,9 @@ With Optional Argument ARG cycle that many buffers."
   (setq arg (or arg 1))
   (let ((buffers (python-django-mgmt-buffer-list)))
     (and buffers
-         (let ((newindex (mod arg (length buffers))))
+         (let ((newindex
+                (mod (+ python-django-mgmt--buffer-index arg)
+                     (length buffers))))
            (set (make-local-variable
                  'python-django-mgmt--buffer-index) newindex)
            (display-buffer (nth newindex  buffers))))))
