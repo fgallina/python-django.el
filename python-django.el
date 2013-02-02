@@ -151,6 +151,7 @@
     (define-key map (kbd "q") 'python-django-close-project)
     (define-key map (kbd "k") 'python-django-mgmt-kill)
     (define-key map (kbd "K") 'python-django-mgmt-kill-all)
+    (define-key map (kbd "u") 'universal-argument)
     (define-key map (kbd "$") 'python-django-mgmt-cycle-buffers-forward)
     (define-key map (kbd "#") 'python-django-mgmt-cycle-buffers-backward)
     (easy-menu-define python-django-menu map "Python Django Mode menu"
