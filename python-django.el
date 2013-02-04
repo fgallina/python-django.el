@@ -949,19 +949,6 @@ process buffer."
                 (function-item display-buffer)
                 (function :tag "Other")))
 
-(defvar python-django-mgmt-output-buffer ""
-  "Output buffer for the current management command.")
-
-(defun python-django-mgmt-capture-output (output)
-  "Accumulate command OUTPUT in `python-django-mgmt-output-buffer'.
-This function is automatically added to
-`comint-output-filter-functions' when
-`python-django-mgmt-run-command' is told to capture output."
-  (setq python-django-mgmt-output-buffer
-        (concat python-django-mgmt-output-buffer
-                (ansi-color-filter-apply output)))
-  output)
-
 (defvar python-django-mgmt--previous-window-configuration nil
   "Snapshot of previous window configuration before executing command.
 This variable is for internal purposes, don't use it directly.")
@@ -1020,7 +1007,7 @@ With Optional Argument ARG cycle that many buffers."
                                        &optional args capture-ouput no-pop)
   "Run management COMMAND with given ARGS.
 When optional argument CAPTURE-OUPUT is non-nil process output is
-captured in the variable `python-django-mgmt-output-buffer'.  If
+not truncated by the `comint-truncate-buffer' output filter.  If
 optional argument NO-POP is provided the process buffer is not
 displayed automatically."
   (interactive
@@ -1056,12 +1043,9 @@ displayed automatically."
       (funcall make-comint-special-func-name full-command process-name))
     (with-current-buffer buffer-name
       (python-util-clone-local-variables current-buffer)
-      (set (make-local-variable 'python-django-mgmt-output-buffer) "")
-      (and capture-ouput
+      (and (not capture-ouput)
            (add-hook 'comint-output-filter-functions
-                     'python-django-mgmt-capture-output nil t))
-      (add-hook 'comint-output-filter-functions
-                'comint-truncate-buffer nil t)
+                     'comint-truncate-buffer nil t))
       (set (make-local-variable
             'python-django-mgmt-parent-buffer) current-buffer)
       (python-django-util-alist-add
@@ -1155,15 +1139,14 @@ ARGS is a property list.  Valid keys are (all optional):
     + :binding, when defined, the new command is bound to the
     default prefix for quick management commands plus this value.
 
-    + :capture-output, when defined, the command output is
-    captured in the `python-django-mgmt-output-buffer' variable
-    which is available in the callback.
+    + :capture-output, when non-nil, the command output is not
+    truncated by the `comint-truncate-buffer' output filter.
 
     + :msg, when defined, commands that use the
     `python-django-qmgmt-kill-and-msg-callback' show this instead
     of the buffer contents.
 
-    + :no-pop, when defined, causes the process buffer to not be
+    + :no-pop, when non-nil, causes the process buffer to not be
     displayed.
 
     + :submenu, when defined, the quick management command is
@@ -1209,9 +1192,10 @@ Each command defined via this macro may have a callback to be
 executed when the process finishes correctly.  The way to define
 callbacks is to append -callback to the defined name, for
 instance if you defined a quick management command called syncdb,
-then you need to create a function called
+then you need to create a function named
 `python-django-qmgmt-syncdb-callback' and it will be called with
-an alist containing all ISWITCHES and ARGS.  See the
+an alist containing all ISWITCHES and ARGS with the
+additional :command key holding the executed command.  See the
 `python-django-qmgmt-kill-and-msg-callback' function for a nice
 example of a callback."
   (declare
@@ -1359,12 +1343,15 @@ example of a callback."
                (apply-partially
                 ',callback
                 (append
-                 ;; Convert the args plist to an alist
-                 (mapcar (lambda (key)
-                           (cons key (plist-get ',args key)))
-                         (loop for i below (length ',args) by 2
-                               collect (nth i ',args)))
-                 ;; Retrieve all switches and commands.
+                 (cons
+                  ;; Add the executed command.
+                  (cons :command ,command)
+                  ;; Convert the args plist to an alist
+                  (mapcar (lambda (key)
+                            (cons key (plist-get ',args key)))
+                          (loop for i below (length ',args) by 2
+                                collect (nth i ',args))))
+                 ;; Retrieve all switches.
                  (mapcar
                   #'(lambda (sym)
                       (let ((val (symbol-value sym)))
@@ -1395,11 +1382,16 @@ example of a callback."
        #',full-name)))
 
 (defun python-django-qmgmt-kill-and-msg-callback (args)
-  "Callback for commands to be cleaned up on finish.
-Argument ARGS is an alist with the arguments passed to the management command."
-  (message (or (cdr (assq :msg args)) (buffer-string)))
-  (kill-buffer)
-  (python-django-mgmt-restore-window-configuration))
+  "Kill the process buffer and show message or output.
+Argument ARGS is an alist with the arguments passed to the
+management command."
+  (let ((msg (or (cdr (assq :msg args))
+                 (buffer-substring-no-properties
+                  (point-min) (point-max))))
+        (buffer-name (buffer-name)))
+    (kill-buffer)
+    (python-django-mgmt-restore-window-configuration)
+    (display-message-or-buffer msg buffer-name)))
 
 (python-django-qmgmt-define collectstatic
   "Collect static files."
@@ -1568,7 +1560,8 @@ management command."
                  (when (y-or-n-p
                         (format "File `%s' exists; overwrite? " file-name))
                    (throw 'file-name file-name)))))))
-        (output-buffer python-django-mgmt-output-buffer))
+        (output-buffer (buffer-substring-no-properties
+                        (point-min) (point-max))))
     (with-temp-buffer
       (set (make-local-variable 'require-final-newline) t)
       (insert output-buffer)
