@@ -1500,7 +1500,7 @@ Optional argument ARGS args for it."
 
 (python-django-qmgmt-define dbshell
   "Run the command-line client for specified database."
-  (:submenu "Database" :binding "dss")
+  (:submenu "Database" :binding "dsh")
   (database (python-django-minibuffer-read-database "Database: " default)
             "default" "--database="))
 
