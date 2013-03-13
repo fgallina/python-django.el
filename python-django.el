@@ -464,6 +464,21 @@ non-nil the cached value is invalidated."
         "from __future__ import print_function;"
         "import django; print(django.get_version(), end='')"))))))
 
+(defvar python-django-info-imports-code
+  (concat "from __future__ import print_function;"
+          "import sys; import os.path;"
+          "from os.path import dirname, abspath;"
+          "stdout = sys.stdout; stderr = sys.stderr;"
+          "sys.stdout = sys.stderr = open(os.devnull, 'w');"
+          "from django.conf import settings;"
+          "from django.utils import simplejson;"
+          ;; Force settings loading so all output is sent to devnull.
+          "settings.DEBUG;"
+          "sys.stdout = stdout; sys.stderr = stderr;")
+  "All imports code used to get info.
+It contains output redirecting features so settings import
+doesn't break the JSON output.")
+
 (defun python-django-info-get-settings (&optional force)
   "Prefretch most common used settings for project.
 Values retrieved by this function are cached so when FORCE is
@@ -489,10 +504,7 @@ non-nil the cached value is invalidated."
                (shell-command-to-string
                 (format "%s -c \"%s %s\""
                         (executable-find python-shell-interpreter)
-                        (concat "from __future__ import print_function;"
-                                "from django.conf import settings;"
-                                "from django.utils import simplejson;"
-                                "import os.path;")
+                        python-django-info-imports-code
                         (concat
                          "print(simplejson.dumps("
                          "dict([(name, getattr(settings, name)) "
@@ -531,11 +543,9 @@ non-nil the cached value is invalidated."
               (json-read-from-string
                (shell-command-to-string
                 (format
-                 "%s -c \"%s %s %s %s\""
+                 "%s -c \"%s %s\""
                  (executable-find python-shell-interpreter)
-                 "from __future__ import print_function;"
-                 "from django.conf import settings;"
-                 "from django.utils import simplejson;"
+                 python-django-info-imports-code
                  (format
                   (concat
                    "print(simplejson.dumps("
@@ -567,10 +577,7 @@ non-nil the cached value is invalidated."
           (shell-command-to-string
            (format "%s -c \"%s %s\""
                    (executable-find python-shell-interpreter)
-                   (concat "from __future__ import print_function;"
-                           "from django.conf import settings;"
-                           "from django.utils import simplejson;"
-                           "from os.path import dirname, abspath;")
+                   python-django-info-imports-code
                    (concat
                     "app_paths = {}\n"
                     "for app in settings.INSTALLED_APPS:\n"
