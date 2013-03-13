@@ -1617,11 +1617,13 @@ management command."
 (python-django-qmgmt-define graph_models-all
   "Creates a Graph of models for all project apps."
   (:submenu "Database" :switches "-ag"  :binding "dgg")
-  (filename (read-file-name "Filename for generated Graph: "
-                            default default)
-            (expand-file-name
-             "graph_all.png" python-django-project-root)
-            "--output=" t))
+  (filename
+   (expand-file-name
+    (read-file-name "Filename for generated Graph: "
+                    default default))
+   (expand-file-name
+    "graph_all.png" python-django-project-root)
+   "--output=" t))
 
 (python-django-qmgmt-define graph_models-apps
   "Creates a Graph of models for given apps."
