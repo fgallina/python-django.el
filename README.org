@@ -32,8 +32,8 @@ This package contains python-django.el
   (require 'python-django)
   #+END_EXAMPLE
 
-  *M-x describe-mode* when editing a python file should be enough to
-  get some good overview about what this major-mode is all about :)
+  See this blog post for a detailed quick start:
+  http://from-the-cloud.com/en/emacs/2013/01/28_emacs-as-a-django-ide-with-python-djangoel.html
 
 * Bug Reports
 
