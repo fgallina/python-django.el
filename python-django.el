@@ -1788,6 +1788,15 @@ management command."
 (defalias 'python-django-qmgmt-migrate-app-callback
   'python-django-qmgmt-kill-and-msg-callback)
 
+(python-django-qmgmt-define migrate-list
+  "Run all migrations for all apps."
+  (:submenu "South" :switches "--list" :binding "soml")
+  (database (python-django-minibuffer-read-database "Database: " default)
+            "default" "--database="))
+
+(defalias 'python-django-qmgmt-migrate-list-callback
+  'python-django-qmgmt-kill-and-msg-callback)
+
 (python-django-qmgmt-define migrate-app-to
   "Run migrations for given app [up|down]-to given number."
   (:submenu "South" :binding "somt")
