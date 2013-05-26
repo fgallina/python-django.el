@@ -507,7 +507,7 @@ non-nil the cached value is invalidated."
                         python-django-info-imports-code
                         (concat
                          "print(simplejson.dumps("
-                         "dict([(name, getattr(settings, name)) "
+                         "dict([(name, getattr(settings, name, None)) "
                          "for name in ("
                          (mapconcat
                           #'(lambda (str) (concat "'" str "'"))
