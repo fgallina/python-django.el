@@ -1954,7 +1954,7 @@ default to a sane value."
 (defvar python-django-ui-ignored-dirs
   '("." ".." ".bzr" ".cdv" "~.dep" "~.dot" "~.nib" "~.plst" ".git" ".hg" ".pc"
     ".svn" "_MTN" "blib" "CVS" "RCS" "SCCS" "_darcs" "_sgbak" "autom4te.cache"
-    "cover_db" "_build" ".ropeproject")
+    "cover_db" "_build" ".ropeproject" "__pycache__")
   "Directories ignored when scanning project files.")
 
 (defvar python-django-ui-allowed-extensions
