@@ -2246,22 +2246,14 @@ With optional ARG, move across that many fields."
            (stringp (nth 1 val))
            (stringp (nth 2 val)))))
 
-(defun python-django-mode-find-buffer (&optional project-name no-match)
-  "Find Django project buffer.
-Optional argument PROJECT-NAME is the project name to match
-against.  Optional argument NO-MATCH causes the search to exclude
-buffers that belong to PROJECT-NAME."
-  (dolist (buf (buffer-list))
-    (and (with-current-buffer buf
-           (and (eq major-mode 'python-django-mode)
-                (or (not project-name)
-                    (if no-match
-                        (not
-                         (string= project-name
-                                  python-django-project-name))
-                      (string= project-name
-                               python-django-project-name)))))
-         (return buf))))
+(defun python-django-mode-find-next-buffer ()
+  "Find the next Django project buffer available."
+  (let ((current-buffer (current-buffer)))
+   (dolist (buf (buffer-list))
+     (and (with-current-buffer buf
+            (and (eq major-mode 'python-django-mode)
+                 (not (equal buf current-buffer))))
+          (return buf)))))
 
 (defun python-django-mode-on-kill-buffer ()
   "Hook run on `buffer-kill-hook'."
@@ -2299,9 +2291,7 @@ settings module (the same happens when called with two or more
   (interactive
    (let ((buf
           ;; Get an existing project buffer that's not the current.
-          (python-django-mode-find-buffer
-           (and (eq major-mode 'python-django-mode)
-                python-django-project-name) t)))
+          (python-django-mode-find-next-buffer)))
      (cond
       ((and (not current-prefix-arg)
             (not buf)
