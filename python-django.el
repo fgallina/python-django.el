@@ -367,6 +367,16 @@ the same variables of python files."
   (and (bufferp key) (setq key (buffer-name key)))
   (cdr (assoc key alist)))
 
+(defun python-django-util-shorten-settings (&optional settings)
+  "Return a shorter SETTINGS module string.
+Optional Argument SETTINGS defaults to the value of
+`python-django-project-settings'."
+  (or settings (setq settings python-django-project-settings))
+  (let ((beg (string-match "settings\\." settings)))
+    (if beg
+        (substring settings (+ beg (length (match-string-no-properties 0))))
+      settings)))
+
 
 ;;; Help
 
@@ -1033,8 +1043,9 @@ displayed automatically."
          (process-name
           (replace-regexp-in-string
            "[\t ]+$" ""
-           (format "[Django %s] ./manage.py %s %s"
+           (format "[Django: %s (%s)] ./manage.py %s %s"
                    python-django-project-name
+                   (python-django-util-shorten-settings)
                    command args)))
          (buffer-name (format "*%s*" process-name))
          (current-buffer (current-buffer))
@@ -2335,7 +2346,10 @@ settings module (the same happens when called with two or more
                        (python-django-info-directory-basename root))))))))))
   (if (not existing)
       (let* ((project-name (python-django-info-directory-basename directory))
-             (buffer-name (format "*Django: %s*" project-name))
+             (buffer-name
+              (format "*Django: %s (%s)*"
+                      project-name
+                      (python-django-util-shorten-settings settings)))
              (success t))
         (with-current-buffer (get-buffer-create buffer-name)
           (let ((inhibit-read-only t))
