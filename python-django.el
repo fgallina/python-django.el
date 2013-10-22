@@ -447,7 +447,8 @@ Optional argument SHOW-HELP when non-nil causes the help buffer to pop."
       (expand-file-name "manage.py" dir))))
 
 (defvar python-django-info-prefetched-settings
-  '("INSTALLED_APPS" "DATABASES" "MEDIA_ROOT" "STATIC_ROOT" "TEMPLATE_DIRS"))
+  '("INSTALLED_APPS" "DATABASES" "MEDIA_ROOT" "STATIC_ROOT" "TEMPLATE_DIRS"
+    "STATICFILES_DIRS"))
 
 (defvar python-django-info--get-setting-cache nil
   "Alist with cached list of settings.")
@@ -2049,6 +2050,17 @@ The function receives one argument, the status buffer."
     (list
      (cons "MEDIA_ROOT" (python-django-info-get-setting "MEDIA_ROOT"))
      (cons "STATIC_ROOT" (python-django-info-get-setting "STATIC_ROOT"))))
+   (cons
+    "Static Content" (mapcar
+                      (lambda (dir)
+                        ;; STATICFILES_DIRS elements can be either a
+                        ;; string or a size-two tuple with the first
+                        ;; element being the prefix and the latter
+                        ;; being the path: http://bit.ly/16Fw9xW
+                        (if (stringp dir)
+                            (cons dir dir)
+                          (cons (aref dir 0) (aref dir 1))))
+                      (python-django-info-get-setting "STATICFILES_DIRS")))
    (cons
     "Templates" (mapcar
                  (lambda (dir)
