@@ -1368,8 +1368,13 @@ example of a callback."
                   ;; Convert the args plist to an alist
                   (mapcar (lambda (key)
                             (cons key (plist-get ',args key)))
-                          (loop for i below (length ',args) by 2
-                                collect (nth i ',args))))
+                          (let ((lst)
+                                (i 0))
+                            ;; Collect all keys from args plist
+                            (while (< i (length ',args))
+                              (setq lst (cons (nth i ',args) lst))
+                              (setq i (+ i 2)))
+                            lst)))
                  ;; Retrieve all switches.
                  (mapcar
                   #'(lambda (sym)
@@ -2272,11 +2277,12 @@ With optional ARG, move across that many fields."
 (defun python-django-mode-find-next-buffer ()
   "Find the next Django project buffer available."
   (let ((current-buffer (current-buffer)))
-   (dolist (buf (buffer-list))
-     (and (with-current-buffer buf
-            (and (eq major-mode 'python-django-mode)
-                 (not (equal buf current-buffer))))
-          (return buf)))))
+    (catch 'buffer
+      (dolist (buf (buffer-list))
+        (and (with-current-buffer buf
+               (and (eq major-mode 'python-django-mode)
+                    (not (equal buf current-buffer))))
+             (throw 'buffer buf))))))
 
 (defun python-django-mode-on-kill-buffer ()
   "Hook run on `buffer-kill-hook'."
