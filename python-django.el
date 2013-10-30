@@ -374,7 +374,9 @@ Optional Argument SETTINGS defaults to the value of
   (or settings (setq settings python-django-project-settings))
   (let ((beg (string-match "settings\\." settings)))
     (if beg
-        (substring settings (+ beg (length (match-string-no-properties 0))))
+        (substring
+         settings
+         (+ beg (length (match-string-no-properties 0 settings))))
       settings)))
 
 
