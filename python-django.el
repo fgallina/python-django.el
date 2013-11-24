@@ -916,12 +916,15 @@ the `python-django-mgmt--available-commands' cache."
 (defun python-django-mgmt-make-comint (command process-name)
   "Run COMMAND with PROCESS-NAME in generic Comint buffer."
   (apply 'make-comint process-name
-         (executable-find python-shell-interpreter) nil
+         (format "%s %s"
+                 (executable-find python-shell-interpreter) 
+                 python-shell-interpreter-args)
+         nil
          (split-string-and-unquote command)))
 
 (defun python-django-mgmt-make-comint-for-shell (command process-name)
   "Run COMMAND with PROCESS-NAME in generic Comint buffer."
-  (let ((python-shell-interpreter-args command))
+  (let ((python-shell-interpreter-args (format "%s %s" python-shell-interpreter-args command)))
     (python-shell-make-comint (python-shell-parse-command) process-name)))
 
 (defun python-django-mgmt-make-comint-for-shell_plus (command process-name)
