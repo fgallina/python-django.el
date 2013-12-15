@@ -1128,6 +1128,15 @@ When called with universal argument you can filter the COMMAND to kill."
 
 ;;; Management shortcuts
 
+(defvar python-django-qmgmt-process-status-ok nil
+  "Non-nil if management command process ended successfully.
+This variable is set automatically and locally to the management
+command process buffer after the process finishes, making it
+available for user defined callbacks.  See
+`python-django-qmgmt-kill-and-msg-callback' as an example for how
+to use this variable to execute callback code only if process
+ended successfully.")
+
 (defmacro python-django-qmgmt-define (name doc-or-args
                                            &optional args &rest iswitches)
   "Define a quick management command.
@@ -1358,9 +1367,10 @@ example of a callback."
               process
               (apply-partially
                #'(lambda (cb process status)
-                   (when (string= status "finished\n")
-                     (set-buffer (process-buffer process))
-                     (funcall cb)))
+                   (set-buffer (process-buffer process))
+                   (set (make-local-variable 'python-django-qmgmt-process-status-ok)
+                        (string= status "finished\n"))
+                   (funcall cb))
                (apply-partially
                 ',callback
                 (append
@@ -1411,13 +1421,14 @@ example of a callback."
   "Kill the process buffer and show message or output.
 Argument ARGS is an alist with the arguments passed to the
 management command."
-  (let ((msg (or (cdr (assq :msg args))
-                 (buffer-substring-no-properties
-                  (point-min) (point-max))))
-        (buffer-name (buffer-name)))
-    (kill-buffer)
-    (python-django-mgmt-restore-window-configuration)
-    (display-message-or-buffer msg buffer-name)))
+  (when python-django-qmgmt-process-status-ok
+    (let ((msg (or (cdr (assq :msg args))
+                   (buffer-substring-no-properties
+                    (point-min) (point-max))))
+          (buffer-name (buffer-name)))
+      (kill-buffer)
+      (python-django-mgmt-restore-window-configuration)
+      (display-message-or-buffer msg buffer-name))))
 
 (python-django-qmgmt-define collectstatic
   "Collect static files."
@@ -1442,33 +1453,34 @@ management command."
 (defun python-django-qmgmt-create_command-callback (args)
   "Callback for create_command quick management command.
 Optional argument ARGS args for it."
-  (let* ((appname (cdr (assoc 'app args)))
-         (manage-directory
-          (file-name-directory
-           (with-current-buffer
-               python-django-mgmt-parent-buffer
-             python-django-project-manage.py)))
-         (default-app-dir
-           (expand-file-name appname manage-directory))
-         (default-create-dir
-           (expand-file-name "management" default-app-dir))
-         (delete-safe
-          (and (file-exists-p default-app-dir)
-               (equal (directory-files default-app-dir)
-                      '("." ".." "management")))))
-    (when (y-or-n-p
-           (format "Created in app %s.  Move it? " default-app-dir))
-      (let ((newdir
-             (read-directory-name
-              "Move app to: " manage-directory nil t)))
-        (if (not (file-exists-p
-                  (expand-file-name "management" newdir)))
-            (rename-file default-create-dir newdir)
-          (message
-           "Directory structure already exists in %s" appname))
-        (and delete-safe (delete-directory default-app-dir t)))))
-  (kill-buffer)
-  (python-django-mgmt-restore-window-configuration))
+  (when python-django-qmgmt-process-status-ok
+   (let* ((appname (cdr (assoc 'app args)))
+          (manage-directory
+           (file-name-directory
+            (with-current-buffer
+                python-django-mgmt-parent-buffer
+              python-django-project-manage.py)))
+          (default-app-dir
+            (expand-file-name appname manage-directory))
+          (default-create-dir
+            (expand-file-name "management" default-app-dir))
+          (delete-safe
+           (and (file-exists-p default-app-dir)
+                (equal (directory-files default-app-dir)
+                       '("." ".." "management")))))
+     (when (y-or-n-p
+            (format "Created in app %s.  Move it? " default-app-dir))
+       (let ((newdir
+              (read-directory-name
+               "Move app to: " manage-directory nil t)))
+         (if (not (file-exists-p
+                   (expand-file-name "management" newdir)))
+             (rename-file default-create-dir newdir)
+           (message
+            "Directory structure already exists in %s" appname))
+         (and delete-safe (delete-directory default-app-dir t)))))
+   (kill-buffer)
+   (python-django-mgmt-restore-window-configuration)))
 
 (python-django-qmgmt-define startapp
   "Create new Django app for current project."
@@ -1478,22 +1490,23 @@ Optional argument ARGS args for it."
 (defun python-django-qmgmt-startapp-callback (args)
   "Callback for clean_pyc quick management command.
 Optional argument ARGS args for it."
-  (let ((appname (cdr (assoc 'app args)))
-        (manage-directory
-         (file-name-directory
-          (with-current-buffer
-              python-django-mgmt-parent-buffer
-            python-django-project-manage.py))))
-    (when (y-or-n-p
-           (format
-            "App created in %s.  Do you want to move it? "
-            manage-directory))
-      (rename-file
-       (expand-file-name appname manage-directory)
-       (read-directory-name
-        "Move app to: " manage-directory nil t))))
-  (kill-buffer)
-  (python-django-mgmt-restore-window-configuration))
+  (when python-django-qmgmt-process-status-ok
+    (let ((appname (cdr (assoc 'app args)))
+          (manage-directory
+           (file-name-directory
+            (with-current-buffer
+                python-django-mgmt-parent-buffer
+              python-django-project-manage.py))))
+      (when (y-or-n-p
+             (format
+              "App created in %s.  Do you want to move it? "
+              manage-directory))
+        (rename-file
+         (expand-file-name appname manage-directory)
+         (read-directory-name
+          "Move app to: " manage-directory nil t))))
+    (kill-buffer)
+    (python-django-mgmt-restore-window-configuration)))
 
 ;; Shell
 
@@ -1571,43 +1584,44 @@ Optional argument ARGS args for it."
   "Callback executed after dumpdata finishes.
 ARGS is an alist containing arguments passed to the quick
 management command."
-  (let ((file-name
-         (catch 'file-name
-           (while t
-             (let ((file-name
-                    (read-file-name
-                     "Save fixture to file: "
-                     (expand-file-name
-                      (with-current-buffer
-                          python-django-mgmt-parent-buffer
-                        python-django-project-root)) nil nil nil)))
-               (if (not (file-exists-p file-name))
-                   (throw 'file-name file-name)
-                 (when (y-or-n-p
-                        (format "File `%s' exists; overwrite? " file-name))
-                   (throw 'file-name file-name)))))))
-        (output-buffer (buffer-substring-no-properties
-                        (point-min) (point-max))))
-    (with-temp-buffer
-      (set (make-local-variable 'require-final-newline) t)
-      (insert output-buffer)
-      ;; Ensure there's a final newline
-      (and (> (point-max) (point-min))
-           (not (= (char-after (1- (point-max))) ?\n))
-           (insert "\n"))
-      (write-region
-       (progn
-         ;; Remove possible logs from output.
-         (goto-char (point-min))
-         (re-search-forward
-          "^\\[\\|^<\\?xml +version=\"\\|^- +fields: " nil t)
-         (beginning-of-line 1)
-         (point))
-       (point-max)
-       file-name))
-    (kill-buffer)
-    (python-django-mgmt-restore-window-configuration)
-    (message "Fixture saved to file `%s'." file-name)))
+  (when python-django-qmgmt-process-status-ok
+    (let ((file-name
+           (catch 'file-name
+             (while t
+               (let ((file-name
+                      (read-file-name
+                       "Save fixture to file: "
+                       (expand-file-name
+                        (with-current-buffer
+                            python-django-mgmt-parent-buffer
+                          python-django-project-root)) nil nil nil)))
+                 (if (not (file-exists-p file-name))
+                     (throw 'file-name file-name)
+                   (when (y-or-n-p
+                          (format "File `%s' exists; overwrite? " file-name))
+                     (throw 'file-name file-name)))))))
+          (output-buffer (buffer-substring-no-properties
+                          (point-min) (point-max))))
+      (with-temp-buffer
+        (set (make-local-variable 'require-final-newline) t)
+        (insert output-buffer)
+        ;; Ensure there's a final newline
+        (and (> (point-max) (point-min))
+             (not (= (char-after (1- (point-max))) ?\n))
+             (insert "\n"))
+        (write-region
+         (progn
+           ;; Remove possible logs from output.
+           (goto-char (point-min))
+           (re-search-forward
+            "^\\[\\|^<\\?xml +version=\"\\|^- +fields: " nil t)
+           (beginning-of-line 1)
+           (point))
+         (point-max)
+         file-name))
+      (kill-buffer)
+      (python-django-mgmt-restore-window-configuration)
+      (message "Fixture saved to file `%s'." file-name))))
 
 (defalias 'python-django-qmgmt-dumpdata-app-callback
   'python-django-qmgmt-dumpdata-callback)
@@ -1666,11 +1680,12 @@ management command."
 (defun python-django-qmgmt-graph_models-callback (args)
   "Callback for graph_model quick management command.
 Optional argument ARGS args for it."
-  (let ((open (y-or-n-p "Open generated graph? ")))
-    (kill-buffer)
-    (python-django-mgmt-restore-window-configuration)
-    (and open
-         (find-file (cdr (assoc 'filename args))))))
+  (when python-django-qmgmt-process-status-ok
+    (let ((open (y-or-n-p "Open generated graph? ")))
+      (kill-buffer)
+      (python-django-mgmt-restore-window-configuration)
+      (and open
+           (find-file (cdr (assoc 'filename args)))))))
 
 (defalias 'python-django-qmgmt-graph_models-all-callback
   'python-django-qmgmt-graph_models-callback)
@@ -1761,15 +1776,16 @@ Optional argument ARGS args for it."
   "Callback for commands that create migrations.
 Argument ARGS is an alist with the arguments passed to the
 management command."
-  (let ((app (cdr (assq 'app args))))
-    (python-django-qmgmt-kill-and-msg-callback args)
-    (and (y-or-n-p "Open the created migration? ")
-         (find-file
-          (expand-file-name
-           (car (last (python-django-info-get-app-migrations app)))
-           (expand-file-name
-            "migrations"
-            (python-django-info-get-app-path app)))))))
+  (when python-django-qmgmt-process-status-ok
+    (let ((app (cdr (assq 'app args))))
+      (python-django-qmgmt-kill-and-msg-callback args)
+      (and (y-or-n-p "Open the created migration? ")
+           (find-file
+            (expand-file-name
+             (car (last (python-django-info-get-app-migrations app)))
+             (expand-file-name
+              "migrations"
+              (python-django-info-get-app-path app))))))))
 
 (python-django-qmgmt-define convert_to_south
   "Convert given app to South."
