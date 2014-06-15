@@ -398,6 +398,15 @@ the same variables of python files."
   (and (bufferp key) (setq key (buffer-name key)))
   (cdr (assoc key alist)))
 
+;; Based on `file-name-extension'
+(defun python-django-util-file-name-extension (filename)
+  "Return FILENAME's final \"extension\" sans dot."
+  (save-match-data
+    (let ((file (file-name-nondirectory filename)))
+      (if (and (string-match "\\.[^.]*\\'" file)
+               (not (eq 0 (match-beginning 0))))
+          (substring file (+ (match-beginning 0) 1))))))
+
 (defun python-django-util-shell-command-to-string (command)
   "Execute shell COMMAND and return its output as a string.
 Returns a cons cell where the car is the exit status and the cdr
@@ -2203,7 +2212,7 @@ Optional argument IGNORE is there for compatibility."
               (if (file-directory-p file)
                   (when (not (member basename python-django-ui-ignored-dirs))
                     (setq dir-list (cons basename dir-list)))
-                (when (member (file-name-extension file)
+                (when (member (python-django-util-file-name-extension file)
                               python-django-ui-allowed-extensions)
                   (setq file-list (cons basename file-list))))))
           (setq dir-list (sort dir-list 'string<))
