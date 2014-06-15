@@ -549,7 +549,11 @@ non-nil the cached value is invalidated."
           "stdout = sys.stdout; stderr = sys.stderr\n"
           "sys.stdout = sys.stderr = open(os.devnull, 'w')\n"
           "from django.conf import settings\n"
-          "from django.utils import simplejson\n"
+          "# Try to import json really hard\n"
+          "try:\n"
+          "    import json\n"
+          "except ImportError:\n"
+          "    from django.utils import simplejson as json\n"
           "# Force settings loading so all output is sent to devnull.\n"
           "settings.DEBUG\n"
           "sys.stdout = stdout; sys.stderr = stderr\n\n")
@@ -594,7 +598,7 @@ non-nil the cached value is invalidated."
                          "acc = {}\n"
                          "for name in " settings-list-string ":\n"
                          "    acc[name] = getattr(settings, name, None)\n"
-                         "print(simplejson.dumps(acc), end='')"))))))
+                         "print(json.dumps(acc), end='')"))))))
         (mapc
          (lambda (elt)
            (let ((cached-val
@@ -629,7 +633,7 @@ non-nil the cached value is invalidated."
                  python-django-info-imports-code
                  (format
                   (concat
-                   "print(simplejson.dumps("
+                   "print(json.dumps("
                    "getattr(settings, '%s', None)), end='')")
                   setting)))))
              (already-cached (assq (intern setting)
@@ -667,7 +671,7 @@ non-nil the cached value is invalidated."
                     "        for sub in app.split('.')[1:]:\n"
                     "            mod = getattr(mod, sub)\n"
                     "    app_paths[app] = dirname(abspath(mod.__file__))\n"
-                    "print(simplejson.dumps(app_paths), end='')"))))))
+                    "print(json.dumps(app_paths), end='')"))))))
     python-django-info--get-app-paths-cache))
 
 (defun python-django-info-get-app-path (app &optional force)
