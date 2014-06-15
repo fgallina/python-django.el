@@ -527,20 +527,22 @@ non-nil the cached value is invalidated."
        "%s -c \"%s\""
        (executable-find python-shell-interpreter)
        (concat
-        "from __future__ import print_function;"
-        "import django; print(django.get_version(), end='')"))))))
+        "from __future__ import print_function\n"
+        "import django\n"
+        "print(django.get_version(), end='')"))))))
 
 (defvar python-django-info-imports-code
-  (concat "from __future__ import print_function;"
-          "import sys; import os.path;"
-          "from os.path import dirname, abspath;"
-          "stdout = sys.stdout; stderr = sys.stderr;"
-          "sys.stdout = sys.stderr = open(os.devnull, 'w');"
-          "from django.conf import settings;"
-          "from django.utils import simplejson;"
-          ;; Force settings loading so all output is sent to devnull.
-          "settings.DEBUG;"
-          "sys.stdout = stdout; sys.stderr = stderr;")
+  (concat "\n"
+          "from __future__ import print_function\n"
+          "import sys\n"
+          "from os.path import dirname, abspath\n"
+          "stdout = sys.stdout; stderr = sys.stderr\n"
+          "sys.stdout = sys.stderr = open(os.devnull, 'w')\n"
+          "from django.conf import settings\n"
+          "from django.utils import simplejson\n"
+          "# Force settings loading so all output is sent to devnull.\n"
+          "settings.DEBUG\n"
+          "sys.stdout = stdout; sys.stderr = stderr\n\n")
   "All imports code used to get info.
 It contains output redirecting features so settings import
 doesn't break the JSON output.")
@@ -565,21 +567,24 @@ non-nil the cached value is invalidated."
       (let* ((process-environment
               (python-django-info-calculate-process-environment))
              (exec-path (python-shell-calculate-exec-path))
+             (settings-list-string
+              (concat "["
+                      (mapconcat
+                       #'(lambda (str) (concat "'" str "'"))
+                       python-django-info-prefetched-settings
+                       ", ")
+                      "]"))
              (value
               (json-read-from-string
                (python-django-util-shell-command-or-error
-                (format "%s -c \"%s %s\""
+                (format "%s -c \"%s%s\""
                         (executable-find python-shell-interpreter)
                         python-django-info-imports-code
                         (concat
-                         "print(simplejson.dumps("
-                         "dict([(name, getattr(settings, name, None)) "
-                         "for name in ("
-                         (mapconcat
-                          #'(lambda (str) (concat "'" str "'"))
-                          python-django-info-prefetched-settings
-                          ", ")
-                         ")])), end='')"))))))
+                         "acc = {}\n"
+                         "for name in " settings-list-string ":\n"
+                         "    acc[name] = getattr(settings, name, None)\n"
+                         "print(simplejson.dumps(acc), end='')"))))))
         (mapc
          (lambda (elt)
            (let ((cached-val
@@ -609,7 +614,7 @@ non-nil the cached value is invalidated."
               (json-read-from-string
                (python-django-util-shell-command-or-error
                 (format
-                 "%s -c \"%s %s\""
+                 "%s -c \"%s%s\""
                  (executable-find python-shell-interpreter)
                  python-django-info-imports-code
                  (format
@@ -641,7 +646,7 @@ non-nil the cached value is invalidated."
               (exec-path (python-shell-calculate-exec-path)))
          (json-read-from-string
           (python-django-util-shell-command-or-error
-           (format "%s -c \"%s %s\""
+           (format "%s -c \"%s%s\""
                    (executable-find python-shell-interpreter)
                    python-django-info-imports-code
                    (concat
@@ -678,12 +683,12 @@ non-nil the cached value is invalidated."
           (python-django-info-calculate-process-environment))
          (exec-path (python-shell-calculate-exec-path)))
     (python-django-util-shell-command-or-error
-     (format
-      "%s -c \"%s %s %s\""
-      (executable-find python-shell-interpreter)
-      "from __future__ import print_function;"
-      (format "import os.path; import %s;" module)
-      (format "print(%s.__file__.replace('.pyc', '.py'), end='')" module)))))
+     (format "%s -c \"%s%s%s\""
+             (executable-find python-shell-interpreter)
+             python-django-info-imports-code
+             (format "import %s\n" module)
+             (format
+              "print(%s.__file__.replace('.pyc', '.py'), end='')" module)))))
 
 (defun python-django-info-directory-basename (&optional dir)
   "Get innermost directory name for given DIR."
