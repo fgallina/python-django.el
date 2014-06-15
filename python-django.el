@@ -293,6 +293,37 @@ Many Django faces inherit from this one by default."
     (2 'font-lock-function-name-face))))
 
 
+;;; Error logging
+
+(defvar python-django-error-log-formatter
+  #'python-django-error-default-formatter)
+
+(defun python-django-error-default-formatter (error-string)
+  "Formats ERROR-STRING to be placed in the error log."
+  (format
+   (concat
+    "An error occurred retrieving project information.\n"
+    "Check your project settings and try again:\n\n"
+    "Current values:\n"
+    "  + python-django-project-root: %s\n"
+    "  + python-django-project-settings: %s\n"
+    "  + python-shell-interpreter: %s\n"
+    "    - found in %s\n\n"
+    "Details: \n\n%s\n")
+   python-django-project-root
+   python-django-project-settings
+   python-shell-interpreter
+   (let* ((process-environment
+           (python-django-info-calculate-process-environment))
+          (exec-path (python-shell-calculate-exec-path)))
+     (executable-find python-shell-interpreter))
+   error-string))
+
+(defun python-django-error-log (error-string)
+  "Log ERROR-STRING by calling `user-error'."
+  (user-error "%s" (funcall python-django-error-log-formatter error-string)))
+
+
 ;;; Utility functions
 
 (defun python-django-util-clone-local-variables ()
@@ -367,6 +398,28 @@ the same variables of python files."
   (and (bufferp key) (setq key (buffer-name key)))
   (cdr (assoc key alist)))
 
+(defun python-django-util-shell-command-to-string (command)
+  "Execute shell COMMAND and return its output as a string.
+Returns a cons cell where the car is the exit status and the cdr
+is the captured output."
+  (with-temp-buffer
+    (cons
+     (apply 'call-process shell-file-name
+            nil t nil (list shell-command-switch command))
+     (buffer-string))))
+
+(defun python-django-util-shell-command-or-error (command)
+  "Execute shell COMMAND and return its output as a string.
+If the exit status is an error `python-django-error-log' is used
+to display command output."
+  (let* ((result (python-django-util-shell-command-to-string command))
+         (status (car result))
+         (output (cdr result)))
+    (if (zerop status)
+        output
+      (python-django-error-log
+       (concat "Error executing: " command "\n\n" output)))))
+
 (defun python-django-util-shorten-settings (&optional settings)
   "Return a shorter SETTINGS module string.
 Optional Argument SETTINGS defaults to the value of
@@ -387,7 +440,7 @@ Optional Argument SETTINGS defaults to the value of
   (let* ((process-environment
           (python-django-info-calculate-process-environment))
          (exec-path (python-shell-calculate-exec-path)))
-    (shell-command-to-string
+    (python-django-util-shell-command-or-error
      (format "%s %s help%s"
              (executable-find python-shell-interpreter)
              python-django-project-manage.py
@@ -469,7 +522,7 @@ non-nil the cached value is invalidated."
    (let* ((process-environment
            (python-django-info-calculate-process-environment))
           (exec-path (python-shell-calculate-exec-path)))
-     (shell-command-to-string
+     (python-django-util-shell-command-or-error
       (format
        "%s -c \"%s\""
        (executable-find python-shell-interpreter)
@@ -514,7 +567,7 @@ non-nil the cached value is invalidated."
              (exec-path (python-shell-calculate-exec-path))
              (value
               (json-read-from-string
-               (shell-command-to-string
+               (python-django-util-shell-command-or-error
                 (format "%s -c \"%s %s\""
                         (executable-find python-shell-interpreter)
                         python-django-info-imports-code
@@ -554,7 +607,7 @@ non-nil the cached value is invalidated."
              (exec-path (python-shell-calculate-exec-path))
              (value
               (json-read-from-string
-               (shell-command-to-string
+               (python-django-util-shell-command-or-error
                 (format
                  "%s -c \"%s %s\""
                  (executable-find python-shell-interpreter)
@@ -587,7 +640,7 @@ non-nil the cached value is invalidated."
                (python-django-info-calculate-process-environment))
               (exec-path (python-shell-calculate-exec-path)))
          (json-read-from-string
-          (shell-command-to-string
+          (python-django-util-shell-command-or-error
            (format "%s -c \"%s %s\""
                    (executable-find python-shell-interpreter)
                    python-django-info-imports-code
@@ -624,7 +677,7 @@ non-nil the cached value is invalidated."
   (let* ((process-environment
           (python-django-info-calculate-process-environment))
          (exec-path (python-shell-calculate-exec-path)))
-    (shell-command-to-string
+    (python-django-util-shell-command-or-error
      (format
       "%s -c \"%s %s %s\""
       (executable-find python-shell-interpreter)
@@ -2410,37 +2463,21 @@ settings module (the same happens when called with two or more
                  (file-name-directory
                   python-django-project-manage.py))
             (python-django-util-clone-local-variables)
-            (python-django-ui-insert-header)
             (set (make-local-variable 'tree-widget-image-enable)
                  python-django-ui-image-enable)
             (tree-widget-set-theme python-django-ui-theme)
             (condition-case err
-                (mapc (lambda (section)
-                        (python-django-ui-tree-section-insert
-                         (car section) (cdr section))
-                        (insert "\n"))
-                      (python-django-ui-build-section-alist))
-              (error
+                (progn
+                  (python-django-ui-insert-header)
+                  (mapc (lambda (section)
+                          (python-django-ui-tree-section-insert
+                           (car section) (cdr section))
+                          (insert "\n"))
+                        (python-django-ui-build-section-alist)))
+              (user-error
                (setq success nil)
-               (insert
-                (format
-                 (concat
-                  "An error occurred retrieving project information.\n"
-                  "Check your project settings and try again:\n\n"
-                  "Current values:\n"
-                  "  + python-django-project-root: %s\n"
-                  "  + python-django-project-settings: %s\n"
-                  "  + python-shell-interpreter: %s\n"
-                  "    - found in %s\n\n\n"
-                  "Error: %s \n")
-                 python-django-project-root
-                 python-django-project-settings
-                 python-shell-interpreter
-                 (let* ((process-environment
-                         (python-django-info-calculate-process-environment))
-                        (exec-path (python-shell-calculate-exec-path)))
-                   (executable-find python-shell-interpreter))
-                 (error-message-string err))))))
+               (insert (error-message-string err))
+               (goto-char (point-min)))))
           (when success
             (add-hook 'kill-buffer-hook
                       #'python-django-mode-on-kill-buffer nil t)
