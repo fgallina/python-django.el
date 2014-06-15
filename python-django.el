@@ -543,6 +543,7 @@ non-nil the cached value is invalidated."
 (defvar python-django-info-imports-code
   (concat "\n"
           "from __future__ import print_function\n"
+          "import os\n"
           "import sys\n"
           "from os.path import dirname, abspath\n"
           "stdout = sys.stdout; stderr = sys.stderr\n"
