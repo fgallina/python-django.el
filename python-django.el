@@ -2453,7 +2453,8 @@ settings module (the same happens when called with two or more
                (format "%s.settings"
                        (python-django-info-directory-basename root))))))))))
   (if (not existing)
-      (let* ((project-name (python-django-info-directory-basename directory))
+      (let* ((directory (expand-file-name directory))
+             (project-name (python-django-info-directory-basename directory))
              (buffer-name
               (format "*Django: %s (%s)*"
                       project-name
