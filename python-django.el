@@ -958,7 +958,7 @@ the `python-django-mgmt--available-commands' cache."
                   (insert help-string)
                   (goto-char (point-min))
                   (delete-region
-                   (and (re-search-forward "Usage: manage.py")
+                   (and (re-search-forward "Type") ;; Old:"Usage: manage.py"
                         (line-beginning-position))
                    (or (and
                         (re-search-forward "Available subcommands:\n" nil t)
