@@ -33,7 +33,7 @@ This package contains python-django.el
   #+END_EXAMPLE
 
   See this blog post for a detailed quick start:
-  http://from-the-cloud.com/en/emacs/2013/01/28_emacs-as-a-django-ide-with-python-djangoel.html
+  http://web.archive.org/web/20131010005338/http://from-the-cloud.com/en/emacs/2013/01/28_emacs-as-a-django-ide-with-python-djangoel.html
 
 * Bug Reports
 
