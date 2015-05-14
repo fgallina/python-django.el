@@ -450,10 +450,12 @@ Optional Argument SETTINGS defaults to the value of
           (python-django-info-calculate-process-environment))
          (exec-path (python-shell-calculate-exec-path)))
     (python-django-util-shell-command-or-error
-     (format "%s %s help%s"
+     ;; "--help" is better than "help" because it won't make the command end
+     ;; with failure on Django<1.4.
+     (format "%s %s %s--help"
              (executable-find python-shell-interpreter)
              python-django-project-manage.py
-             (or (and command (concat " " command)) "")))))
+             (if command (format "%s " command) "")))))
 
 (defun python-django-help (&optional command show-help)
   "Get help for given COMMAND.
@@ -950,27 +952,18 @@ the `python-django-mgmt--available-commands' cache."
        (set (make-local-variable 'python-django-mgmt--available-commands) nil))
   (cdr
    (or python-django-mgmt--available-commands
-       (let ((help-string (python-django-help)))
+       (let ((help-string (python-django-help))
+             (commands))
          (set (make-local-variable 'python-django-mgmt--available-commands)
-              (let ((help-string (python-django-help))
-                    (commands))
-                (with-temp-buffer
-                  (insert help-string)
-                  (goto-char (point-min))
-                  (delete-region
-                   (and (re-search-forward "Usage: manage.py")
-                        (line-beginning-position))
-                   (or (and
-                        (re-search-forward "Available subcommands:\n" nil t)
-                        (forward-line -1)
-                        (line-beginning-position))
-                       (point-max)))
-                  (goto-char (point-min))
-                  (re-search-forward "Available subcommands:\n")
-                  (while (re-search-forward " +\\([a-z0-9_]+\\)\n" nil t)
-                    (setq commands
-                          (cons (match-string-no-properties 1) commands)))
-                  (reverse commands))))))))
+              (with-temp-buffer
+                (insert help-string)
+                (goto-char (point-min))
+                (re-search-forward "Available subcommands:\n")
+                (delete-region (point-min) (point))
+                (while (re-search-forward " +\\([a-z0-9_]+\\)\n" nil t)
+                  (setq commands
+                        (cons (match-string-no-properties 1) commands)))
+                (reverse commands)))))))
 
 (defun python-django-mgmt-list-command-args (command)
   "List available arguments for COMMAND."
