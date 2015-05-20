@@ -1202,16 +1202,162 @@ available for user defined callbacks.  See
 to use this variable to execute callback code only if process
 ended successfully.")
 
+(eval-and-compile
+  (defun python-django-qmgmt--make-fn-symbol (name)
+    "Return a quick management command defun symbol from NAME."
+    (intern (format "python-django-qmgmt-%s" name)))
+
+  (defun python-django-qmgmt--make-spec
+      (command &optional switches interactive-switches)
+    "Return human readable spec for COMMAND.
+
+The spec is the shell command with placeholders in it.  Example:
+
+  ./manage.py cmd --all --database=<database> --app=<app>
+
+Where \"--all\" is SWITCHES value, while database and app are
+generated from INTERACTIVE-SWITCHES."
+    (concat
+     (format "./manage.py %s " command)
+     (unless (zerop (length switches))
+       (format "%s " switches))
+     (when interactive-switches
+       (mapconcat
+        (lambda (arg)
+          (let* ((switch (nth 3 arg))
+                 (switch
+                  (cond
+                   ((eq (length switch) 0)
+                    "")
+                   ((eq ?= (car (last (append switch nil))))
+                    switch)
+                   (t (format "%s " switch))))
+                 (varname (symbol-name (nth 0 arg))))
+            (format "%s<%s>" switch varname)))
+        interactive-switches
+        " "))))
+
+  (defun python-django-qmgmt--make-docstring
+      (command &optional switches interactive-switches docstring)
+    "Return documentation string for auto-generated command.
+Arguments COMMAND, SWITCHES, INTERACTIVE-SWITCHES and DOCSTRING
+are used to generate the string."
+    (format
+     "%s\n\n%s"
+     ;; Show either the spec, or the docstring *and* the spec.
+     (concat
+      (unless (zerop (length docstring))
+        (concat docstring "\n\n"))
+      "Run: "
+      (python-django-qmgmt--make-spec
+       command switches interactive-switches))
+     (concat
+      "This is an interactive command defined via "
+      "`python-django-qmgmt-define' macro.\n"
+      "Parameter defaults can be overriden by "
+      "calling this command with `prefix-arg' .\n\n"
+      (when switches
+        (format "Default switches: \n\n  * %s\n\n" switches))
+      (when interactive-switches
+        (format
+         "Arguments: \n\n%s"
+         (mapconcat
+          (lambda (arg)
+            (let* ((default (nth 2 arg))
+                   (switch (nth 3 arg))
+                   (switch
+                    (cond
+                     ((eq (length switch) 0)
+                      nil)
+                     ((eq ?= (car (last (append switch nil))))
+                      switch)
+                     (t (format "%s " switch))))
+                   (force-ask (nth 4 arg)))
+              (concat
+               (format "  * %s:\n"
+                       (upcase (symbol-name (car arg))))
+               (format "    + Switch: %s\n" switch)
+               (format "    + Defaults: %s\n"
+                       (prin1-to-string default))
+               (format "    + Read SPEC: %s\n"
+                       (prin1-to-string (nth 1 arg)))
+               (format "    + Force prompt: %s\n"
+                       force-ask)
+               (format "    + Requires user interaction?: %s"
+                       (if (or force-ask (not default))
+                           "yes" "no")))))
+          interactive-switches "\n\n"))))))
+
+  (defun python-django-qmgmt--make-interactive-form (interactive-switches)
+    "Return interactive form from INTERACTIVE-SWITCHES."
+    (mapcar
+     (lambda (arg)
+       ;; Interactive switch form: (VARNAME PROMPT DEFAULT SWITCH FORCE-ASK)
+       (let* ((default (nth 2 arg))
+              (switch (nth 3 arg))
+              (switch
+               (cond ((zerop (length switch))
+                      ;; This is a positional argument.  Skip prefix.
+                      "")
+                     ((eq ?= (car (last (append switch nil))))
+                      ;; Long switch (e.g "--database="), keep it as prefix.
+                      switch)
+                     ;; Shor switch (e.g "-d"), add space suffix.
+                     (t (format "%s " switch))))
+              (force-ask (nth 4 arg))
+              (read-func
+               (if (stringp (nth 1 arg))
+                   ;; Use string as prompt.
+                   `(read-string ,(nth 1 arg) default)
+                 ;; Execute form to read argument value.
+                 (nth 1 arg))))
+         `(concat
+           ,switch
+           (setq ,(car arg)
+                 (let ((default ,default))
+                   (if (or ,force-ask
+                           current-prefix-arg
+                           (not default))
+                       ,read-func
+                     default))))))
+     interactive-switches))
+
+  (defun python-django-qmgmt--add-binding (symbol &optional binding)
+    "Add keybinding to SYMBOL using BINDING."
+    (when binding
+      (ignore-errors
+        (define-key python-django-mode-map (concat "c" binding) symbol))))
+
+  (defun python-django-qmgmt--add-menu-item
+      (symbol submenu command &optional switches interactive-switches docstring)
+    "Add menu item for SYMBOL in SUBMENU to execute mangament COMMAND.
+Arguments SWITCHES, INTERACTIVE-SWITCHES and DOCSTRING are used
+to generate a descriptive item."
+    (let ((spec (python-django-qmgmt--make-spec
+                 command switches interactive-switches)))
+      (easy-menu-add-item
+       'python-django-menu nil (list submenu) "---")
+      (easy-menu-add-item
+       'python-django-menu (list submenu)
+       (vector
+        spec
+        symbol
+        :help (if (zerop (length docstring))        ; also handle empty string
+                  (format "Run ./manage.py %s" spec)
+                (car (split-string docstring "\n")))
+        :active (member command (python-django-mgmt-list-commands)))
+       "---"))))
+
 (defmacro python-django-qmgmt-define (name doc-or-args
-                                           &optional args &rest iswitches)
+                                           &optional args &rest interactive-switches)
   "Define a quick management command.
 Argument NAME is a symbol and it is used to calculate the
 management command this command will execute, so it should have
 the form cmdname[-rest].  Argument DOC-OR-ARGS might be the
 docstring for the defined command or the list of arguments, when
 a docstring is supplied ARGS is used as the list of arguments
-instead.  The rest ISWITCHES is a list of interactive switches
-the user will be prompted for.
+instead.  The rest INTERACTIVE-SWITCHES is a list of interactive
+switches the user will be prompted for.
 
 This is a full example that will define how to execute Django's
 dumpdata for the current application quickly:
@@ -1245,7 +1391,7 @@ ARGS is a property list.  Valid keys are (all optional):
     displayed.
 
     + :submenu, when defined, the quick management command is
-    added within that submenu tree.  If omitted the menu is added
+    added within that submenu tree.  If omitted the item is added
     to the root.
 
     + :switches, when defined, the new command is executed with
@@ -1255,10 +1401,10 @@ If you define any extra keys they will not be taken into account
 by this macro but you may well use them in your command's
 callback.
 
-ISWITCHES have the form (VARNAME PROMPT DEFAULT SWITCH
-FORCE-ASK), you can add 0 or more ISWITCHES depending on the
-number of parameters you need to pass to the management command.
-The description for each element of the list are:
+INTERACTIVE-SWITCHES have the form (VARNAME PROMPT DEFAULT SWITCH
+FORCE-ASK), you can add 0 or more INTERACTIVE-SWITCHES depending
+on the number of parameters you need to pass to the management
+command.  The description for each element of the list are:
 
     + VARNAME must be a unique symbol not used in other switch.
 
@@ -1289,134 +1435,39 @@ callbacks is to append -callback to the defined name, for
 instance if you defined a quick management command called syncdb,
 then you need to create a function named
 `python-django-qmgmt-syncdb-callback' and it will be called with
-an alist containing all ISWITCHES and ARGS with the
+an alist containing all INTERACTIVE-SWITCHES and ARGS with the
 additional :command key holding the executed command.  See the
 `python-django-qmgmt-kill-and-msg-callback' function for a nice
 example of a callback."
-  (declare
-   (indent defun))
-  (let* ((docstring (and (stringp doc-or-args) doc-or-args))
+  (declare (indent defun))
+  (let* ((docstring (when (stringp doc-or-args) doc-or-args))
          (args (if docstring args doc-or-args))
          (args (if (eq ?: (string-to-char (symbol-name (car args))))
                    args
-                 ;; args is not a plist, append it to iswitches and
+                 ;; args is not a plist, append it to interactive-switches and
                  ;; set args to nil.
-                 (setq iswitches (cons args iswitches))
+                 (setq interactive-switches (cons args interactive-switches))
                  nil))
-         (defun-name (intern (format "qmgmt-%s" name)))
-         (full-name (intern (format "python-django-%s" defun-name)))
-         (callback (intern (format "%s-callback" full-name)))
+         (fn-symbol (python-django-qmgmt--make-fn-symbol name))
+         (callback (intern (format "%s-callback" fn-symbol)))
          (command (car (split-string (format "%s" name) "-")))
          (binding (plist-get args :binding))
          (capture-output (plist-get args :capture-output))
          (no-pop (plist-get args :no-pop))
-         (quick-submenu (plist-get args :submenu))
+         (submenu (plist-get args :submenu))
          (switches (plist-get args :switches))
-         (keys (and binding (format "c%s" binding)))
-         (defargs (mapcar 'car iswitches))
-         (cmd-spec
-          ;; The spec is the shell command with placeholders in it.
-          ;; Example: ./manage.py dumpdata --database=<database>
-          ;; --indent=<indent> --format=<format> <app>
-          (concat
-           (format "./manage.py %s " command)
-           (and switches (format "%s " switches))
-           (and defargs
-                (mapconcat
-                 (lambda (arg)
-                   (let* ((switch (nth 3 arg))
-                          (switch
-                           (cond
-                            ((eq (length switch) 0)
-                             "")
-                            ((eq ?= (car (last (append switch nil))))
-                             switch)
-                            (t (format "%s " switch))))
-                          (varname (symbol-name (nth 0 arg))))
-                     (format "%s<%s>" switch varname)))
-                 iswitches
-                 " "))))
-         (interactive-code
-          (mapcar
-           (lambda (arg)
-             (let* ((default (nth 2 arg))
-                    (switch (nth 3 arg))
-                    (switch
-                     (cond ((eq (length switch) 0)
-                            "")
-                           ((eq ?= (car (last (append switch nil))))
-                            switch)
-                           (t (format "%s " switch))))
-                    (force-ask (nth 4 arg))
-                    (read-func
-                     (if (listp (nth 1 arg))
-                         (nth 1 arg)
-                       `(read-string ,(nth 1 arg) default))))
-               `(concat
-                 ,switch
-                 (setq ,(car arg)
-                       (let ((default ,default))
-                         (if (or ,force-ask
-                                 current-prefix-arg
-                                 (not default))
-                             ,read-func
-                           default))))))
-           iswitches))
-         (item-docstring
-          (if docstring
-              (car (split-string docstring "\n"))
-            (format "Run ./manage.py %s" cmd-spec)))
-         (full-docstring
-          (format "%s\n\n%s\n\n%s"
-                  cmd-spec
-                  (or docstring item-docstring)
-                  (concat
-                   "This is an interactive command defined by "
-                   "`python-django-qmgmt-define' macro.\n"
-                   "Users can override any parameter with defaults by "
-                   "calling this command with `prefix-arg' .\n\n"
-                   (and switches
-                        (format "Default switches: \n\n  * %s\n\n" switches))
-                   (and
-                    iswitches
-                    (format
-                     "Arguments: \n\n%s"
-                     (mapconcat
-                      (lambda (arg)
-                        (let* ((default (nth 2 arg))
-                               (switch (nth 3 arg))
-                               (switch
-                                (cond
-                                 ((eq (length switch) 0)
-                                  nil)
-                                 ((eq ?= (car (last (append switch nil))))
-                                  switch)
-                                 (t (format "%s " switch))))
-                               (force-ask (nth 4 arg)))
-                          (concat
-                           (format "  * %s:\n"
-                                   (upcase (symbol-name (car arg))))
-                           (format "    + Switch: %s\n" switch)
-                           (format "    + Defaults: %s\n"
-                                   (prin1-to-string default))
-                           (format "    + Read SPEC: %s\n"
-                                   (prin1-to-string (nth 1 arg)))
-                           (format "    + Force prompt: %s\n"
-                                   force-ask)
-                           (format "    + Requires user interaction?: %s"
-                                   (if (or force-ask (not default))
-                                       "yes" "no")))))
-                      iswitches "\n\n")))))))
+         (defargs (mapcar 'car interactive-switches)))
     `(progn
-       (defun ,full-name ,defargs
-         ,full-docstring
+       (defun ,fn-symbol ,defargs
+         ,(python-django-qmgmt--make-docstring
+           command switches interactive-switches docstring)
          (interactive
-          (let ,defargs
-            (list ,@interactive-code)))
+          (list ,@(python-django-qmgmt--make-interactive-form
+                   interactive-switches)))
          (setq python-django-mgmt--previous-window-configuration
                (current-window-configuration))
          (let* ((cmd-args (concat ,switches (and ,switches " ")
-                                  (mapconcat 'symbol-value ',defargs " ")))
+                                  (mapconcat #'symbol-value ',defargs " ")))
                 (process (get-buffer-process
                           (python-django-mgmt-run-command
                            ,command cmd-args
@@ -1465,22 +1516,11 @@ example of a callback."
                            (substring val 3))
                           (t val)))))
                   ',defargs) nil)))))))
-       ;; Add the specified binding for this quick command.
-       (and ,binding
-            (ignore-errors
-              (define-key python-django-mode-map ,keys ',full-name)))
-       ;; Add menu stuff.
-       (easy-menu-add-item
-        'python-django-menu nil (list ,quick-submenu) "---")
-       (easy-menu-add-item
-        'python-django-menu (list ,quick-submenu)
-        [,cmd-spec
-         ,full-name
-         :help ,item-docstring
-         :active (member ,command (python-django-mgmt-list-commands))
-         ] "---")
+       (python-django-qmgmt--add-binding #',fn-symbol ,binding)
+       (python-django-qmgmt--add-menu-item
+        #',fn-symbol ,submenu ,command ,switches ',interactive-switches ,docstring)
        ;; Just like defun, return the defined function.
-       #',full-name)))
+       #',fn-symbol)))
 
 (defun python-django-qmgmt-kill-and-msg-callback (args)
   "Kill the process buffer and show message or output.
