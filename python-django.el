@@ -665,15 +665,25 @@ non-nil the cached value is invalidated."
            (format "%s -c \"%s%s\""
                    (executable-find python-shell-interpreter)
                    python-django-info-imports-code
-                   (concat
-                    "app_paths = {}\n"
-                    "for app in settings.INSTALLED_APPS:\n"
-                    "    mod = __import__(app)\n"
-                    "    if '.' in app:\n"
-                    "        for sub in app.split('.')[1:]:\n"
-                    "            mod = getattr(mod, sub)\n"
-                    "    app_paths[app] = dirname(abspath(mod.__file__))\n"
-                    "print(json.dumps(app_paths), end='')"))))))
+                   "
+try:
+    from django.apps import apps
+except ImportError:
+    # Django<1.7 app loading.
+    import os.path
+    from django.utils.importlib import import_module
+    app_paths = {}
+    for app_string in settings.INSTALLED_APPS:
+        app_module = import_module(app_string)
+        app_path = os.path.dirname(app_module.__file__)
+        # Keep the last part (e.g: 'django.contrib.admin' -> 'admin')
+        app_label = app_string.rpartition('.')[2]
+        app_paths[app_label] = app_path
+else:
+    # Django>=1.7 app loading.
+    apps.populate(installed_apps=settings.INSTALLED_APPS)
+    app_paths = {app.label: app.path for app in apps.get_app_configs()}
+print(json.dumps(app_paths), end='')")))))
     python-django-info--get-app-paths-cache))
 
 (defun python-django-info-get-app-path (app &optional force)
@@ -681,6 +691,15 @@ non-nil the cached value is invalidated."
 Values retrieved by this function are cached so when FORCE is
 non-nil the cached value is invalidated."
   (cdr (assq (intern app) (python-django-info-get-app-paths force))))
+
+(defun python-django-info-get-installed-apps (&optional force)
+  "Get list of strings of installed app labels.
+Values retrieved by this function are cached so when FORCE is
+non-nil the cached value is invalidated."
+  (mapcar
+   (lambda (elt)
+     (symbol-name (car elt)))
+   (python-django-info-get-app-paths force)))
 
 (defun python-django-info-get-app-migrations (app)
   "Get APP's list of migrations."
@@ -865,16 +884,11 @@ PROMPT is a string to prompt user for filenames."
   (python-django-minibuffer-read-list
    'python-django-minibuffer-read-file-name prompt))
 
-(defun python-django-minibuffer-read-app (prompt &optional initial-input full)
+(defun python-django-minibuffer-read-app (prompt &optional initial-input)
   "Read django app from minibuffer.
 PROMPT is a string to prompt user for app.  Optional argument
-INITIAL-INPUT is the initial prompted value.  When FULL is
-non-nill the full module name for the installed app is prompted."
-  (let ((apps (mapcar (lambda (app)
-                        (if (not full)
-                            (car (last (split-string app "\\.")))
-                          app))
-                      (python-django-info-get-setting "INSTALLED_APPS")))
+INITIAL-INPUT is the initial prompted value."
+  (let ((apps (python-django-info-get-installed-apps))
         (current-buffer (current-buffer)))
     (minibuffer-with-setup-hook
         (lambda ()
@@ -887,13 +901,12 @@ non-nill the full module name for the installed app is prompted."
             (when (> (length app) 0)
               (throw 'app app))))))))
 
-(defun python-django-minibuffer-read-apps (prompt &optional initial-input full)
+(defun python-django-minibuffer-read-apps (prompt &optional initial-input)
   "Read django apps from minibuffer.
 PROMPT is a string to prompt user for app.  Optional argument
-INITIAL-INPUT is the initial prompted value.  When FULL is
-non-nill the full module name for the installed app is prompted."
+INITIAL-INPUT is the initial prompted value."
   (python-django-minibuffer-read-list
-   'python-django-minibuffer-read-app prompt full))
+   'python-django-minibuffer-read-app prompt))
 
 (defun python-django-minibuffer-read-database (prompt &optional initial-input)
   "Read django database router name from minibuffer.
@@ -1942,7 +1955,7 @@ management command."
   (:submenu "South" :binding "somt")
   (database (python-django-minibuffer-read-database "Database: " default)
             "default" "--database=")
-  (app (python-django-minibuffer-read-app "Migrate App: " nil t))
+  (app (python-django-minibuffer-read-app "Migrate App: "))
   (migration (python-django-minibuffer-read-migration "To migration: " app)))
 
 (defalias 'python-django-qmgmt-migrate-app-to-callback
@@ -2058,13 +2071,11 @@ default to a sane value."
   "Jump to APP's directory."
   (interactive
    (list
-    (python-django-minibuffer-read-app "Jump to app: " nil t)))
-  (let ((app (assq (intern app)
-                   (python-django-info-get-app-paths))))
-    (when app
-      (goto-char (point-min))
-      (re-search-forward (format " %s" (car app)))
-      (python-django-ui-move-to-closest-icon))))
+    (python-django-minibuffer-read-app "Jump to app: ")))
+  (when (python-django-info-get-app-path app)
+    (goto-char (point-min))
+    (re-search-forward (format " %s" app))
+    (python-django-ui-move-to-closest-icon)))
 
 (defun python-django-cmd-jump-to-media (which)
   "Jump to a WHICH media directory."
@@ -2169,10 +2180,11 @@ The function receives one argument, the status buffer."
   "Create section Alist for current project."
   (list
    (cons
-    "Apps" (mapcar
-            (lambda (app)
-              (cons app (python-django-info-get-app-path app)))
-            (python-django-info-get-setting "INSTALLED_APPS")))
+    "Apps"
+    (mapcar
+     (lambda (app)
+       (cons app (python-django-info-get-app-path app)))
+     (python-django-info-get-installed-apps)))
    (cons
     "Media"
     (list
