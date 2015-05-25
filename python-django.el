@@ -1333,19 +1333,19 @@ are used to generate the string."
     "Add menu item for SYMBOL in SUBMENU to execute mangament COMMAND.
 Arguments SWITCHES, INTERACTIVE-SWITCHES and DOCSTRING are used
 to generate a descriptive item."
-    (let ((spec (python-django-qmgmt--make-spec
-                 command switches interactive-switches)))
+    (let* ((spec (python-django-qmgmt--make-spec
+                  command switches interactive-switches))
+           (help (if (zerop (length docstring))  ; also handle empty string
+                     (format "Run ./manage.py %s" spec)
+                   (car (split-string docstring "\n")))))
       (easy-menu-add-item
        'python-django-menu nil (list submenu) "---")
       (easy-menu-add-item
        'python-django-menu (list submenu)
-       (vector
-        spec
-        symbol
-        :help (if (zerop (length docstring))        ; also handle empty string
-                  (format "Run ./manage.py %s" spec)
-                (car (split-string docstring "\n")))
-        :active (member command (python-django-mgmt-list-commands)))
+       `[,spec
+         ,symbol
+         :help ,help
+         :active (member ,command (python-django-mgmt-list-commands))]
        "---"))))
 
 (defmacro python-django-qmgmt-define (name doc-or-args
