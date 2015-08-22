@@ -1002,18 +1002,10 @@ the `python-django-mgmt--available-commands' cache."
   (let ((python-shell-interpreter-args command))
     (python-shell-make-comint (python-shell-parse-command) process-name)))
 
-(defun python-django-mgmt-make-comint-for-shell_plus (command process-name)
-  "Run COMMAND with PROCESS-NAME in generic Comint buffer."
-  (python-django-mgmt-make-comint-for-shell command process-name))
-
 (defun python-django-mgmt-make-comint-for-runserver (command process-name)
   "Run COMMAND with PROCESS-NAME in generic Comint buffer."
   (let ((python-shell-enable-font-lock nil))
     (python-django-mgmt-make-comint-for-shell command process-name)))
-
-(defun python-django-mgmt-make-comint-for-runserver_plus (command process-name)
-  "Run COMMAND with PROCESS-NAME in generic Comint buffer."
-  (python-django-mgmt-make-comint-for-runserver command process-name))
 
 (defun python-django-mgmt-make-comint-for-dbshell (command process-name)
   "Run COMMAND with PROCESS-NAME in generic Comint buffer."
@@ -1102,12 +1094,15 @@ With Optional Argument ARG cycle that many buffers."
   (python-django-mgmt-cycle-buffers-forward (- (or arg 1))))
 
 (defun python-django-mgmt-run-command (command
-                                       &optional args capture-ouput no-pop)
+                                       &optional args capture-ouput no-pop
+                                       make-comint-function)
   "Run management COMMAND with given ARGS.
 When optional argument CAPTURE-OUPUT is non-nil process output is
 not truncated by the `comint-truncate-buffer' output filter.  If
 optional argument NO-POP is provided the process buffer is not
-displayed automatically."
+displayed automatically.  When optional argument
+MAKE-COMINT-FUNCTION is non-nil use that function to create the
+comint process, defaults to `python-django-mgmt-make-comint'."
   (interactive
    (list
     (setq command
@@ -1130,16 +1125,13 @@ displayed automatically."
                    command args)))
          (buffer-name (format "*%s*" process-name))
          (current-buffer (current-buffer))
-         (make-comint-special-func-name
-          (intern
-           (format "python-django-mgmt-make-comint-for-%s" command)))
+         (make-comint-function (or make-comint-function
+                                   #'python-django-mgmt-make-comint))
          (full-command
           (format "%s %s %s"
                   python-django-project-manage.py
                   command args)))
-    (if (not (fboundp make-comint-special-func-name))
-        (python-django-mgmt-make-comint full-command process-name)
-      (funcall make-comint-special-func-name full-command process-name))
+    (funcall make-comint-function full-command process-name)
     (with-current-buffer buffer-name
       (python-util-clone-local-variables current-buffer)
       (and (not capture-ouput)
@@ -1417,6 +1409,9 @@ ARGS is a property list.  Valid keys are (all optional):
     + :switches, when defined, the new command is executed with
     these fixed switches.
 
+    + :make-comint-function, a function to be used to create the
+    comint process, defaults to `python-django-mgmt-make-comint'.
+
     + :functions, If the value is a function, it is called with
     two arguments.  If it is a list, the elements are called, in
     order, with same two arguments each.  The first argument is
@@ -1485,6 +1480,7 @@ example of a callback."
          (no-pop (plist-get args :no-pop))
          (submenu (plist-get args :submenu))
          (switches (plist-get args :switches))
+         (make-comint-function (plist-get args :make-comint-function))
          (defargs (mapcar 'car interactive-switches))
          ;; Abnormal hooks AKA functions
          (functions-symbol (python-django-qmgmt--make-functions-symbol name))
@@ -1507,7 +1503,8 @@ example of a callback."
                 (process (get-buffer-process
                           (python-django-mgmt-run-command
                            ,command cmd-args
-                           ,capture-output ,no-pop))))
+                           ,capture-output ,no-pop
+                           ,make-comint-function))))
            (message "Running: ./manage.py %s %s" ,command cmd-args)
            (set-process-sentinel
             process
@@ -1644,11 +1641,13 @@ details."
 
 (python-django-qmgmt-define shell
   "Run a Python interpreter for this project."
-  (:submenu "Shell" :binding "ss"))
+  (:submenu "Shell" :binding "ss"
+            :make-comint-function #'python-django-mgmt-make-comint-for-shell))
 
 (python-django-qmgmt-define shell_plus
   "Like the 'shell' but autoloads all models."
-  (:submenu "Shell" :binding "sp"))
+  (:submenu "Shell" :binding "sp"
+            :make-comint-function #'python-django-mgmt-make-comint-for-shell))
 
 ;; Database
 
@@ -1661,7 +1660,8 @@ details."
 
 (python-django-qmgmt-define dbshell
   "Run the command-line client for specified database."
-  (:submenu "Database" :binding "dsh")
+  (:submenu "Database" :binding "dsh"
+            :make-comint-function #'python-django-mgmt-make-comint-for-dbshell)
   (database (python-django-minibuffer-read-database "Database: " default)
             "default" "--database="))
 
@@ -1849,13 +1849,15 @@ details."
 
 (python-django-qmgmt-define runserver
   "Start development Web server."
-  (:submenu "Server" :binding "rr")
+  (:submenu "Server" :binding "rr"
+            :make-comint-function #'python-django-mgmt-make-comint-for-runserver)
   (bindaddr "Serve on [ip]:[port]: "
             python-django-qmgmt-runserver-default-bindaddr))
 
 (python-django-qmgmt-define runserver_plus
   "Start extended development Web server."
-  (:submenu "Server" :binding "rp")
+  (:submenu "Server" :binding "rp"
+            :make-comint-function #'python-django-mgmt-make-comint-for-runserver)
   (bindaddr "Serve on [ip]:[port]: "
             python-django-qmgmt-runserver-default-bindaddr))
 
