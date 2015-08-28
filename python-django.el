@@ -671,8 +671,9 @@ try:
 except ImportError:
     # Django<1.7 app loading.
     import os.path
+    from collections import OrderedDict
     from django.utils.importlib import import_module
-    app_paths = {}
+    app_paths = OrderedDict()
     for app_string in settings.INSTALLED_APPS:
         app_module = import_module(app_string)
         app_path = os.path.dirname(app_module.__file__)
@@ -681,8 +682,9 @@ except ImportError:
         app_paths[app_label] = app_path
 else:
     # Django>=1.7 app loading.
+    from collections import OrderedDict
     apps.populate(installed_apps=settings.INSTALLED_APPS)
-    app_paths = {app.label: app.path for app in apps.get_app_configs()}
+    app_paths = OrderedDict((app.label, app.path) for app in apps.get_app_configs())
 print(json.dumps(app_paths), end='')")))))
     python-django-info--get-app-paths-cache))
 
