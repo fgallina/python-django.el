@@ -2020,7 +2020,9 @@ default to a sane value."
   (browse-url
    (format
     "https://docs.djangoproject.com/en/%s/"
-    (substring (python-django-info-get-version) 0 3))))
+    (mapconcat 'identity
+               (butlast (split-string (python-django-info-get-version) "\\."))
+               "."))))
 
 (defun python-django-cmd-visit-settings ()
   "Visit settings file."
